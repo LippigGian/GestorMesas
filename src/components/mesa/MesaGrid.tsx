@@ -113,7 +113,7 @@
 // }
 
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MesaCard } from './MesaCard';
 import { MesaDialog } from './MesaDialog';
 import type { Celda, Mesa } from '@/lib/types';
@@ -130,8 +130,11 @@ type Props = {
 };
 
 export function MesaGrid({ modoEdicion }: Props) {
-  const filas = 5;
-  const columnas = 6;
+ 
+  const [cantidadFilas, setCantidadFilas] = useState(5);
+  const [cantidadColumnas, setCantidadColumnas] = useState(6);
+  const filas = cantidadFilas;
+  const columnas = cantidadColumnas;
 
   const [celdas, setCeldas] = useState<Celda[]>(
     Array.from({ length: filas * columnas }, (_, i) => ({
@@ -143,6 +146,17 @@ export function MesaGrid({ modoEdicion }: Props) {
   const [celdaSeleccionada, setCeldaSeleccionada] = useState<number | null>(null);
   const [numeroMesa, setNumeroMesa] = useState('');
   const [forma, setForma] = useState<'cuadrada' | 'redonda'>('cuadrada');
+
+
+  useEffect(() => {
+  setCeldas(
+    Array.from({ length: cantidadFilas * cantidadColumnas }, (_, i) => ({
+      x: i % cantidadColumnas,
+      y: Math.floor(i / cantidadColumnas),
+    }))
+  );
+}, [cantidadFilas, cantidadColumnas]);
+
 
   const handleAbrirDialogo = (index: number) => {
     const mesa = celdas[index].mesa;
@@ -243,6 +257,34 @@ function DroppableCelda({ id, children }: { id: string; children: React.ReactNod
 
 
   return (
+  <div>
+    {modoEdicion && (
+      <div className="mb-4 flex gap-4">
+        <label className="flex flex-col text-sm">
+          Filas
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={cantidadFilas}
+            onChange={(e) => setCantidadFilas(Number(e.target.value))}
+            className="border p-1 rounded w-20"
+          />
+        </label>
+        <label className="flex flex-col text-sm">
+          Columnas
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={cantidadColumnas}
+            onChange={(e) => setCantidadColumnas(Number(e.target.value))}
+            className="border p-1 rounded w-20"
+          />
+        </label>
+      </div>
+    )}
+
     <div
       className={modoEdicion ? 'grid gap-1' : 'relative'}
       style={
@@ -255,39 +297,38 @@ function DroppableCelda({ id, children }: { id: string; children: React.ReactNod
       }
     >
       <DndContext onDragEnd={handleDragEnd}>
-  {celdas.map((celda, i) =>
-    modoEdicion ? (
-      <DroppableCelda key={i} id={i.toString()}>
-        {celda.mesa ? (
-          <DraggableMesa id={i.toString()}>
-            <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
-          </DraggableMesa>
-        ) : (
-          <span
-            className="text-gray-400"
-            onClick={() => handleAbrirDialogo(i)}
-          >
-            +
-          </span>
+        {celdas.map((celda, i) =>
+          modoEdicion ? (
+            <DroppableCelda key={i} id={i.toString()}>
+              {celda.mesa ? (
+                <DraggableMesa id={i.toString()}>
+                  <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+                </DraggableMesa>
+              ) : (
+                <span
+                  className="text-gray-400 grid"
+                  onClick={() => handleAbrirDialogo(i)}
+                >
+                  +
+                </span>
+              )}
+            </DroppableCelda>
+          ) : celda.mesa ? (
+            <div
+              key={i}
+              className="absolute"
+              style={{
+                left: `${celda.x * 80}px`,
+                top: `${celda.y * 80}px`,
+                width: '80px',
+                height: '80px',
+              }}
+            >
+              <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+            </div>
+          ) : null
         )}
-      </DroppableCelda>
-    ) : celda.mesa ? (
-      <div
-        key={i}
-        className="absolute"
-        style={{
-          left: `${celda.x * 80}px`,
-          top: `${celda.y * 80}px`,
-          width: '80px',
-          height: '80px',
-        }}
-      >
-        <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
-      </div>
-    ) : null
-  )}
-</DndContext>
-
+      </DndContext>
 
       <MesaDialog
         open={celdaSeleccionada !== null}
@@ -297,9 +338,11 @@ function DroppableCelda({ id, children }: { id: string; children: React.ReactNod
         setNumeroMesa={setNumeroMesa}
         setForma={setForma}
         onConfirmar={confirmarGuardarMesa}
-          modoEdicion={modoEdicion}
-/>
+        modoEdicion={modoEdicion}
+      />
     </div>
-  );
+  </div>
+);
+
 }
 export default MesaGrid;
