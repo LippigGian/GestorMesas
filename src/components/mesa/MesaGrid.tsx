@@ -118,6 +118,12 @@ import { MesaCard } from './MesaCard';
 import { MesaDialog } from './MesaDialog';
 import type { Celda, Mesa } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  DndContext,
+  useDraggable,
+  useDroppable
+} from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
 
 type Props = {
   modoEdicion: boolean;
@@ -177,6 +183,65 @@ export function MesaGrid({ modoEdicion }: Props) {
     setForma('cuadrada');
   };
 
+  //Manejo drag and drop
+const handleDragEnd = (event: DragEndEvent) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const fromIndex = parseInt(active.id.toString());
+  const toIndex = parseInt(over.id.toString());
+
+  setCeldas((prev) => {
+    const updated = [...prev];
+
+    const mesaOrigen = updated[fromIndex].mesa;
+    const mesaDestino = updated[toIndex].mesa;
+
+    // Si no hay mesa en origen o ya hay mesa en destino, no hacemos nada
+    if (!mesaOrigen || mesaDestino) return prev;
+
+    updated[fromIndex].mesa = undefined;
+    updated[toIndex].mesa = mesaOrigen;
+
+    return updated;
+  });
+};
+
+
+
+
+function DraggableMesa({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id,
+  });
+
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
+    : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+      {children}
+    </div>
+  );
+}
+
+function DroppableCelda({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+<div
+  ref={setNodeRef}
+  className="border border-gray-300 bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition"
+  style={{ width: 80, height: 80 }}
+>
+
+      {children}
+    </div>
+  );
+}
+
+
   return (
     <div
       className={modoEdicion ? 'grid gap-1' : 'relative'}
@@ -189,34 +254,40 @@ export function MesaGrid({ modoEdicion }: Props) {
           : { height: filas * 80, width: columnas * 80 }
       }
     >
-      {celdas.map((celda, i) =>
-        modoEdicion ? (
-          <div
-            key={`${celda.x}-${celda.y}`}
-            className="border border-gray-300 bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition"
+      <DndContext onDragEnd={handleDragEnd}>
+  {celdas.map((celda, i) =>
+    modoEdicion ? (
+      <DroppableCelda key={i} id={i.toString()}>
+        {celda.mesa ? (
+          <DraggableMesa id={i.toString()}>
+            <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+          </DraggableMesa>
+        ) : (
+          <span
+            className="text-gray-400"
             onClick={() => handleAbrirDialogo(i)}
           >
-            {celda.mesa ? (
-              <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
-            ) : (
-              <span className="text-gray-400">+</span>
-            )}
-          </div>
-        ) : celda.mesa ? (
-          <div
-            key={`${celda.x}-${celda.y}`}
-            className="absolute"
-            style={{
-              left: `${celda.x * 80}px`,
-              top: `${celda.y * 80}px`,
-              width: '80px',
-              height: '80px',
-            }}
-          >
-            <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
-          </div>
-        ) : null
-      )}
+            +
+          </span>
+        )}
+      </DroppableCelda>
+    ) : celda.mesa ? (
+      <div
+        key={i}
+        className="absolute"
+        style={{
+          left: `${celda.x * 80}px`,
+          top: `${celda.y * 80}px`,
+          width: '80px',
+          height: '80px',
+        }}
+      >
+        <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+      </div>
+    ) : null
+  )}
+</DndContext>
+
 
       <MesaDialog
         open={celdaSeleccionada !== null}
