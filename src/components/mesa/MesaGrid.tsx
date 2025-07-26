@@ -147,15 +147,48 @@ export function MesaGrid({ modoEdicion }: Props) {
   const [numeroMesa, setNumeroMesa] = useState('');
   const [forma, setForma] = useState<'cuadrada' | 'redonda'>('cuadrada');
 
+useEffect(() => {
+  setCeldas((prevCeldas) => {
+    const nuevasCeldas: Celda[] = Array.from(
+      { length: cantidadFilas * cantidadColumnas },
+      (_, i) => {
+        const x = i % cantidadColumnas;
+        const y = Math.floor(i / cantidadColumnas);
 
-  useEffect(() => {
-  setCeldas(
-    Array.from({ length: cantidadFilas * cantidadColumnas }, (_, i) => ({
-      x: i % cantidadColumnas,
-      y: Math.floor(i / cantidadColumnas),
-    }))
-  );
+        // Buscamos si ya había una celda en esa posición
+        const celdaAnterior = prevCeldas.find((c) => c.x === x && c.y === y);
+
+        return {
+          x,
+          y,
+          mesa: celdaAnterior?.mesa ?? undefined,
+        };
+      }
+    );
+    return nuevasCeldas;
+  });
 }, [cantidadFilas, cantidadColumnas]);
+//UseEFfect para mockear mesas:
+
+useEffect(() => {
+const mesasMockeadas: Celda[] = [
+  { x: 0, y: 0, mesa: { id: 'm1', numero: '1', tipo: 'cuadrada' } },
+  { x: 1, y: 0, mesa: { id: 'm2', numero: '2', tipo: 'redonda' } },
+  { x: 2, y: 1, mesa: { id: 'm3', numero: '3', tipo: 'cuadrada' } },
+  { x: 3, y: 1, mesa: { id: 'm4', numero: '4', tipo: 'redonda' } },
+];
+
+
+  
+  setCeldas((prevCeldas) =>
+    prevCeldas.map((celda) => {
+      const encontrada = mesasMockeadas.find(
+        (m) => m.x === celda.x && m.y === celda.y
+      );
+      return encontrada ?? celda;
+    })
+  );
+}, []);
 
 
   const handleAbrirDialogo = (index: number) => {
@@ -243,6 +276,8 @@ function DraggableMesa({ id, children }: { id: string; children: React.ReactNode
 
 function DroppableCelda({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
+
+  
   return (
 <div
   ref={setNodeRef}
