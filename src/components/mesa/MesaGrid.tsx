@@ -35,13 +35,21 @@ export function MesaGrid({ modoEdicion }: Props) {
     return;
   }
 
-  setCeldas((prev) =>
-    prev.map((celda, i) =>
-      i === celdaSeleccionada
-        ? { ...celda, mesa: { numero: numeroMesa.trim(), tipo: forma } }
-        : celda
-    )
-  );
+setCeldas((prev) =>
+  prev.map((celda, i) =>
+    i === celdaSeleccionada
+      ? {
+          ...celda,
+          mesa: {
+            id: crypto.randomUUID(), // ✅ Genera un id único
+            numero: numeroMesa.trim(),
+            tipo: forma,
+          },
+        }
+      : celda
+  )
+);
+
 
   setCeldaSeleccionada(null);
   setNumeroMesa('');

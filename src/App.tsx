@@ -3,7 +3,7 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import MesaManager from './pages/MesaManager'
-import { Navbar } from './components/navbar'
+import { Navbar } from './components/Navbar'
 
 function App() {
   const [modoEdicion, setModoEdicion] = useState(false);
