@@ -6,12 +6,12 @@ import MesaManager from './pages/MesaManager'
 import { Navbar } from './components/navbar'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [modoEdicion, setModoEdicion] = useState(false);
 
   return (
     <>
-  <Navbar />
-<MesaManager />
+  <Navbar modoEdicion={modoEdicion} setModoEdicion={setModoEdicion} />
+  <MesaManager modoEdicion={modoEdicion} />
     </>
   )
 }

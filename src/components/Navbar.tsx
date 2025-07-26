@@ -8,9 +8,15 @@ import {
   Settings,
   LayoutGrid,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
+import { Pencil, Save } from "lucide-react";
 
-export function Navbar() {
+type NavbarProps = {
+  modoEdicion: boolean;
+  setModoEdicion: React.Dispatch<React.SetStateAction<boolean>>;
+};
+
+export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   return (
     <header className="bg-gray-900 text-white shadow-md">
       {/* Fila superior */}
@@ -53,6 +59,19 @@ export function Navbar() {
           <Button variant="ghost" className="text-white hover:bg-gray-800">
             Delivery
           </Button>
+          <Button onClick={() => setModoEdicion((prev) => !prev)} variant="outline">
+        {modoEdicion ? (
+          <>
+            <Save className="mr-2 h-4 w-4" />
+            Guardar
+          </>
+        ) : (
+          <>
+            <Pencil className="mr-2 h-4 w-4" />
+            Editar
+          </>
+        )}
+      </Button>
         </nav>
         <div className="flex items-center gap-2 text-sm">
           <Clock className="w-4 h-4" />
