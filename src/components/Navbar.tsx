@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Pencil, Save } from "lucide-react";
+import { Link } from 'react-router-dom';
 
 type NavbarProps = {
   modoEdicion: boolean;
@@ -50,12 +51,12 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
       {/* Fila inferior */}
       <div className="flex items-center justify-between px-4 py-2">
         <nav className="flex gap-2">
-          <Button variant="ghost" className="text-white hover:bg-gray-800">
-            Mesas
-          </Button>
-          <Button variant="ghost" className="text-white hover:bg-gray-800">
-            Mostrador
-          </Button>
+      <Link to="/">
+        <button className="bg-gray-600 px-3 py-1 rounded">Mesas</button>
+      </Link>
+<Link to="/mostrador">
+        <button className="bg-gray-600 px-3 py-1 rounded">Mostrador</button>
+      </Link>
           <Button variant="ghost" className="text-white hover:bg-gray-800">
             Delivery
           </Button>
