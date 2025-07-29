@@ -24,9 +24,11 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
         <div className="flex items-center gap-4">
           <img src="/logo.png" alt="Logo" className="h-8" />
+          <Link to="/productos">
           <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
             <UtensilsCrossed className="w-5 h-5" />
           </Button>
+          </Link>
           <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
             <BarChart3 className="w-5 h-5" />
           </Button>

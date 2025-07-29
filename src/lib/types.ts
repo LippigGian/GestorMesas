@@ -18,3 +18,14 @@ export type Pedido = {
   total: number;
 };
 
+export type Categoria = {
+  id: string;
+  nombre: string;
+};
+
+export type Producto = {
+  id: string;
+  nombre: string;
+  precio: number;
+  categoriaId: string;
+};
