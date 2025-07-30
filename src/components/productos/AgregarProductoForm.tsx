@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { Producto } from "@/lib/types";
+import type { Producto, Categoria } from "@/lib/types";
+import { Label } from "@/components/ui/label";
 
 type Props = {
+  categorias: Categoria[];
   onSave: (producto: Producto) => void;
   onCancel: () => void;
 };
 
-export function AgregarProductoForm({ onSave, onCancel }: Props) {
+export function AgregarProductoForm({ categorias, onSave, onCancel }: Props) {
   const [nombre, setNombre] = useState("");
-  const [precio, setPrecio] = useState(0);
+  const [precio, setPrecio] = useState<number>(0);
+  const [categoriaId, setCategoriaId] = useState<string>(categorias[0]?.id || "");
 
   return (
     <form
@@ -21,22 +24,43 @@ export function AgregarProductoForm({ onSave, onCancel }: Props) {
           id: crypto.randomUUID(),
           nombre,
           precio,
-          categoriaId: "", // completar después con lógica de selección
+          categoriaId,
         });
       }}
     >
       <div>
-        <label className="block text-sm font-medium">Nombre</label>
-        <Input value={nombre} onChange={(e) => setNombre(e.target.value)} required />
+        <Label>Nombre del producto</Label>
+        <Input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          required
+        />
       </div>
+
       <div>
-        <label className="block text-sm font-medium">Precio</label>
+        <Label>Precio</Label>
         <Input
           type="number"
           value={precio}
           onChange={(e) => setPrecio(Number(e.target.value))}
           required
         />
+      </div>
+
+      <div>
+        <Label>Categoría</Label>
+        <select
+          value={categoriaId}
+          onChange={(e) => setCategoriaId(e.target.value)}
+          className="w-full border rounded px-2 py-1"
+          required
+        >
+          {categorias.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.nombre}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex justify-end gap-2">

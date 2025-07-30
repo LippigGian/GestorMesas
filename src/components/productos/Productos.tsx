@@ -17,8 +17,10 @@ const productosMock: Producto[] = [
   { id: "b1", nombre: "Café espresso", precio: 2200, categoriaId: "2" },
 ];
 
+
 export function Productos() {
-  const [categorias] = useState<Categoria[]>(categoriasMock);
+  // const [categorias] = useState<Categoria[]>(categoriasMock);
+   const [categorias, setCategorias] = useState<Categoria[]>(categoriasMock);
   const [productos] = useState<Producto[]>(productosMock);
   const [categoriaSeleccionada, setCategoriaSeleccionada] =
     useState<string>("1");
@@ -26,6 +28,7 @@ export function Productos() {
 
   const [mostrarDialogo, setMostrarDialogo] = useState(false);
   const [mostrarDialogoCategoria, setMostrarDialogoCategoria] = useState(false);
+  
 
   const productosFiltrados = productos.filter(
     (p) =>
@@ -100,14 +103,16 @@ export function Productos() {
     // Aquí podrías agregarla a tu lista local o guardarla en Firebase
   }}
 />
-      <AgregarProductoDialog
-        open={mostrarDialogo}
-        onClose={() => setMostrarDialogo(false)}
-        onSave={(producto) => {
-          console.log("Producto guardado:", producto);
-          // Aquí podrías agregarlo a tu lista local o guardarlo en Firebase
-        }}
-      />
-    </div>
+<AgregarProductoDialog
+  open={mostrarDialogo}
+  onClose={() => setMostrarDialogo(false)}
+  categorias={categorias} // ✅ Así se pasa correctamente
+  onSave={(producto) => {
+    console.log("Producto guardado:", producto);
+    // Aquí podrías agregarlo a tu lista local o guardarlo en Firebase
+  }}
+/>
+
+    </div>  
   );
 }

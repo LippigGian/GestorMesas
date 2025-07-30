@@ -1,14 +1,15 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { Producto } from "@/lib/types";
-// import { ProductoForm } from "./ProductoForm";
-import { AgregarProductoForm } from "./AgregarProductoForm";    
+import type { Producto, Categoria } from "@/lib/types";
+import { AgregarProductoForm } from "./AgregarProductoForm";
+
 type Props = {
   open: boolean;
   onClose: () => void;
   onSave: (producto: Producto) => void;
+  categorias: Categoria[];
 };
 
-export function AgregarProductoDialog({ open, onClose, onSave }: Props) {
+export function AgregarProductoDialog({ open, onClose, onSave, categorias }: Props) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
@@ -17,10 +18,11 @@ export function AgregarProductoDialog({ open, onClose, onSave }: Props) {
         </DialogHeader>
 
         <AgregarProductoForm
+          categorias={categorias}
           onCancel={onClose}
           onSave={(producto) => {
             onSave(producto);
-            onClose(); // Cierra el modal después de guardar
+            onClose();
           }}
         />
       </DialogContent>
