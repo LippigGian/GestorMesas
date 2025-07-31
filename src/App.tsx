@@ -8,6 +8,9 @@ import { Navbar } from './components/Navbar'
 import { Mostrador } from './components/Mostrador'
 import {Productos} from './components/productos/Productos'
 
+
+
+
 function App() {
   const [modoEdicion, setModoEdicion] = useState(false);
 

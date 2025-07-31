@@ -3,11 +3,16 @@ import { Button } from "@/components/ui/button"
 import { Pencil, Save } from 'lucide-react';
 import { MesaGrid } from '@/components/mesa/MesaGrid';
 
+import { useSector } from "@/context/SectorContext";
+
+
 type NavbarProps = {
   modoEdicion: boolean;
 };
 export default function MesaManager({ modoEdicion }: NavbarProps) {
   // const [modoEdicion, setModoEdicion] = useState(true);
+
+const { sectorActual, setSectorActual } = useSector();
 
   return (
     <div className="p-4">
@@ -28,7 +33,9 @@ export default function MesaManager({ modoEdicion }: NavbarProps) {
         </Button> */}
       </div>
 
-      <MesaGrid modoEdicion={modoEdicion} />
+      {/* <MesaGrid modoEdicion={modoEdicion} /> */}
+      <MesaGrid modoEdicion={modoEdicion} sectorActual={sectorActual} />
+
     </div>
   );
 }

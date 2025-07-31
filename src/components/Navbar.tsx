@@ -13,6 +13,8 @@ import { Pencil, Save } from "lucide-react";
 import { Link } from 'react-router-dom';
 import { useLocation } from "react-router-dom";
 import { useState } from "react";
+import { useSector } from "@/context/SectorContext";
+
 
 type NavbarProps = {
   modoEdicion: boolean;
@@ -23,6 +25,7 @@ const location = useLocation();
 const esVistaMesas = location.pathname === "/";
 
 const [sector, setSector] = useState<"salon" | "deck">("salon");
+const { sectorActual, setSectorActual } = useSector();
 
 
   return (
@@ -97,7 +100,7 @@ const [sector, setSector] = useState<"salon" | "deck">("salon");
         <Button variant="secondary">Salón</Button>
         <Button variant="secondary">Deck</Button>
       </div> */}
-      {esVistaMesas && (
+      {/* {esVistaMesas && (
   <div className="flex items-center px-4 py-2 gap-2 border-b border-gray-700">
     <Button
       variant={sector === "salon" ? "secondary" : "ghost"}
@@ -111,8 +114,28 @@ const [sector, setSector] = useState<"salon" | "deck">("salon");
     >
       Deck
     </Button>
+    
+  </div>
+)} */}
+<div>
+  {location.pathname === "/" && (
+  <div className="flex items-center gap-2 px-4 py-2 border-t border-gray-700 bg-gray-800">
+    <button
+      onClick={() => setSectorActual("salon")}
+      className={`px-3 py-1 rounded ${sectorActual === "salon" ? "bg-white text-black" : "bg-gray-600 text-white"}`}
+    >
+      Salón
+    </button>
+    <button
+      onClick={() => setSectorActual("deck")}
+      className={`px-3 py-1 rounded ${sectorActual === "deck" ? "bg-white text-black" : "bg-gray-600 text-white"}`}
+    >
+      Deck
+    </button>
   </div>
 )}
+
+</div>
 
     </header>
   );
