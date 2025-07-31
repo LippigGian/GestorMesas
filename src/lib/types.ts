@@ -1,7 +1,16 @@
+// export type Mesa = {
+//   id: string;
+//   numero: string;
+//   tipo: 'cuadrada' | 'redonda';
+// };
+
 export type Mesa = {
   id: string;
   numero: string;
   tipo: 'cuadrada' | 'redonda';
+  estado?: 'libre' | 'ocupada';
+  personas?: number;
+  productos?: Producto[];
 };
 
 export type Celda = {
@@ -28,4 +37,5 @@ export type Producto = {
   nombre: string;
   precio: number;
   categoriaId: string;
+  cantidad?: number;
 };
