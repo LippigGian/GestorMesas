@@ -1,33 +1,23 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { Categoria, Producto } from "@/lib/types";
+import { useProductosCatalogo } from "@/hooks/useProductosCatalogo";
 import { AgregarCategoriaDialog } from "./AgregarCategoriaDialog";
 import { AgregarProductoDialog } from "./AgregarProductoDialog";
 
-const categoriasMock: Categoria[] = [
-  { id: "1", nombre: "Bebidas" },
-  { id: "2", nombre: "Cafeteria" },
-];
-
-const productosMock: Producto[] = [
-  { id: "a1", nombre: "Agua con gas", precio: 1900, categoriaId: "1" },
-  { id: "a2", nombre: "Pepsi", precio: 1900, categoriaId: "1" },
-  { id: "b1", nombre: "Cafe espresso", precio: 2200, categoriaId: "2" },
-];
-
 export function Productos() {
-  const [categorias] = useState<Categoria[]>(categoriasMock);
-  const [productos] = useState<Producto[]>(productosMock);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("1");
-  const [busqueda, setBusqueda] = useState<string>("");
+  const {
+    agregarCategoria,
+    agregarProducto,
+    busqueda,
+    categorias,
+    categoriaSeleccionada,
+    productosFiltrados,
+    setBusqueda,
+    setCategoriaSeleccionada,
+  } = useProductosCatalogo();
+
   const [mostrarDialogo, setMostrarDialogo] = useState(false);
   const [mostrarDialogoCategoria, setMostrarDialogoCategoria] = useState(false);
-
-  const productosFiltrados = productos.filter(
-    (producto) =>
-      producto.categoriaId === categoriaSeleccionada &&
-      producto.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
 
   return (
     <main className="flex min-h-[calc(100vh-128px)]">
@@ -91,17 +81,13 @@ export function Productos() {
       <AgregarCategoriaDialog
         open={mostrarDialogoCategoria}
         onClose={() => setMostrarDialogoCategoria(false)}
-        onSave={(categoria) => {
-          console.log("Categoria guardada:", categoria);
-        }}
+        onSave={agregarCategoria}
       />
       <AgregarProductoDialog
         open={mostrarDialogo}
         onClose={() => setMostrarDialogo(false)}
         categorias={categorias}
-        onSave={(producto) => {
-          console.log("Producto guardado:", producto);
-        }}
+        onSave={agregarProducto}
       />
     </main>
   );
