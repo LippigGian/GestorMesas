@@ -603,27 +603,27 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const mesaActual: Mesa | null = mesaSeleccionada ?? null;
 
   return (
-    <div>
+    <div className="rounded-lg border bg-card p-4 shadow-sm">
       {modoEdicion && (
-        <div className="mb-4 flex gap-4">
-          <label className="flex flex-col text-sm">
+        <div className="mb-4 flex gap-4 rounded-md border bg-muted/40 p-3">
+          <label className="flex flex-col text-sm font-medium text-foreground">
             Filas
             <input
               type="number"
               min={1}
               value={cantidadFilas}
               onChange={(e) => setCantidadFilas(normalizarDimension(Number(e.target.value)))}
-              className="border p-1 rounded w-20"
+              className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
             />
           </label>
-          <label className="flex flex-col text-sm">
+          <label className="flex flex-col text-sm font-medium text-foreground">
             Columnas
             <input
               type="number"
               min={1}
               value={cantidadColumnas}
               onChange={(e) => setCantidadColumnas(normalizarDimension(Number(e.target.value)))}
-              className="border p-1 rounded w-20"
+              className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
             />
           </label>
         </div>
@@ -646,11 +646,15 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
               <DroppableCelda key={i} id={i.toString()}>
                 {celda.mesa ? (
                   <DraggableMesa id={i.toString()}>
-                    <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+                    <MesaCard
+                      numero={celda.mesa.numero}
+                      tipo={celda.mesa.tipo}
+                      estado={celda.mesa.estado}
+                    />
                   </DraggableMesa>
                 ) : (
                   <span
-                    className="text-gray-400 grid"
+                    className="grid h-full w-full place-items-center text-2xl font-medium text-muted-foreground transition hover:bg-accent/20 hover:text-primary"
                     onClick={() => handleAbrirDialogo(i)}
                   >
                     +
@@ -671,7 +675,11 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
                   setMesaSeleccionada(celda.mesa!);
                 }}
               >
-                <MesaCard numero={celda.mesa.numero} tipo={celda.mesa.tipo} />
+                <MesaCard
+                  numero={celda.mesa.numero}
+                  tipo={celda.mesa.tipo}
+                  estado={celda.mesa.estado}
+                />
               </div>
             ) : null
           )}
@@ -718,7 +726,7 @@ function DroppableCelda({ id, children }: { id: string; children: React.ReactNod
   return (
     <div
       ref={setNodeRef}
-      className="border border-gray-300 bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition"
+      className="flex cursor-pointer items-center justify-center border border-border bg-muted/40 transition hover:bg-accent/20"
       style={{ width: CELL_SIZE, height: CELL_SIZE }}
     >
       {children}

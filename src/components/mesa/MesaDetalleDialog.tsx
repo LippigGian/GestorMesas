@@ -28,7 +28,7 @@ export function MesaDetalleDialog({
   }, [open]);
 
   const total = mesa?.productos?.reduce(
-    (acc, p) => acc + p.precio * p.cantidad,
+    (acc, p) => acc + p.precio * (p.cantidad ?? 1),
     0
   ) ?? 0;
 
@@ -48,7 +48,7 @@ export function MesaDetalleDialog({
               <ul className="text-sm space-y-1">
                 {mesa.productos?.map((p) => (
                   <li key={p.id}>
-                    {p.nombre} x{p.cantidad} — ${p.precio * p.cantidad}
+                    {p.nombre} x{p.cantidad ?? 1} - ${p.precio * (p.cantidad ?? 1)}
                   </li>
                 ))}
               </ul>
@@ -85,7 +85,7 @@ export function MesaDetalleDialog({
             </div>
           )
         ) : (
-          <p className="text-sm text-gray-500">Mesa no disponible.</p>
+          <p className="text-sm text-muted-foreground">Mesa no disponible.</p>
         )}
       </DialogContent>
     </Dialog>

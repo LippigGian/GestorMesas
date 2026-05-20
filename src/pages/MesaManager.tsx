@@ -1,41 +1,20 @@
-import React, { useState } from 'react';
-import { Button } from "@/components/ui/button"
-import { Pencil, Save } from 'lucide-react';
-import { MesaGrid } from '@/components/mesa/MesaGrid';
-
+import { MesaGrid } from "@/components/mesa/MesaGrid";
 import { useSector } from "@/context/SectorContext";
 
-
-type NavbarProps = {
+type MesaManagerProps = {
   modoEdicion: boolean;
 };
-export default function MesaManager({ modoEdicion }: NavbarProps) {
-  // const [modoEdicion, setModoEdicion] = useState(true);
 
-const { sectorActual, setSectorActual } = useSector();
+export default function MesaManager({ modoEdicion }: MesaManagerProps) {
+  const { sectorActual } = useSector();
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Gestión de Mesas</h1>
-        {/* <Button onClick={() => setModoEdicion((prev) => !prev)} variant="outline">
-          {modoEdicion ? (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Guardar
-            </>
-          ) : (
-            <>
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar
-            </>
-          )}
-        </Button> */}
+    <main className="p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">Gestion de Mesas</h1>
       </div>
 
-      {/* <MesaGrid modoEdicion={modoEdicion} /> */}
       <MesaGrid modoEdicion={modoEdicion} sectorActual={sectorActual} />
-
-    </div>
+    </main>
   );
 }

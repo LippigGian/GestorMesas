@@ -10,17 +10,17 @@ const pedidosMock: Pedido[] = [
 ];
 
 
-  const [pedidos, setPedidos] = useState<Pedido[]>(pedidosMock);
+  const [pedidos] = useState<Pedido[]>(pedidosMock);
 
   return (
-    <div className="p-4">
+    <main className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">MOSTRADOR</h2>
+        <h2 className="text-2xl font-bold text-foreground">Mostrador</h2>
         <Button>+ Nuevo Pedido</Button>
       </div>
 
-      <table className="w-full text-sm border border-gray-200">
-        <thead className="bg-gray-100">
+      <table className="w-full overflow-hidden rounded-lg border bg-card text-sm shadow-sm">
+        <thead className="bg-secondary text-secondary-foreground">
           <tr>
             <th className="p-2 border">ID</th>
             <th className="p-2 border">Hora Inicio</th>
@@ -31,11 +31,11 @@ const pedidosMock: Pedido[] = [
         </thead>
         <tbody>
           {pedidos.map((pedido) => (
-            <tr key={pedido.id} className="hover:bg-gray-50">
+            <tr key={pedido.id} className="hover:bg-muted/60">
               <td className="p-2 border">{pedido.id}</td>
               <td className="p-2 border">{pedido.horaInicio}</td>
               <td className="p-2 border">
-                <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">{pedido.estado}</span>
+                <span className="rounded bg-accent/30 px-2 py-1 text-xs font-medium text-primary">{pedido.estado}</span>
               </td>
               <td className="p-2 border">{pedido.cliente}</td>
               <td className="p-2 border">${pedido.total.toLocaleString()}</td>
@@ -43,6 +43,6 @@ const pedidosMock: Pedido[] = [
           ))}
         </tbody>
       </table>
-    </div>
+    </main>
   );
 }
