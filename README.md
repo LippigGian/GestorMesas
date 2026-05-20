@@ -1,69 +1,105 @@
-# React + TypeScript + Vite
+# Gestor Mesas
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacion web hecha con React, TypeScript y Vite para gestionar mesas.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Antes de correr el proyecto, asegurate de tener instalado:
 
-## Expanding the ESLint configuration
+- Node.js
+- npm
+- Git
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Para verificarlo, podes ejecutar:
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+node -v
+npm -v
+git --version
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Instalacion
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Clonar el repositorio:
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+git clone https://github.com/LippigGian/GestorMesas.git
 ```
+
+Entrar a la carpeta del proyecto:
+
+```powershell
+cd GestorMesas
+```
+
+Si ya lo clonaste en esta carpeta:
+
+```powershell
+cd "C:\Users\GianL\OneDrive\Desktop\gestor mesas"
+```
+
+Instalar las dependencias:
+
+```powershell
+npm install
+```
+
+## Correr en desarrollo
+
+Levantar el servidor local:
+
+```powershell
+npm run dev
+```
+
+Vite va a mostrar una URL en la terminal. Normalmente es:
+
+```text
+http://localhost:5173/
+```
+
+Abrila en el navegador para usar la aplicacion.
+
+## Compilar para produccion
+
+Generar la version final del proyecto:
+
+```powershell
+npm run build
+```
+
+La salida se genera en la carpeta `dist`.
+
+## Previsualizar la build
+
+Despues de compilar, podes previsualizar la version de produccion con:
+
+```powershell
+npm run preview
+```
+
+## Comandos disponibles
+
+```powershell
+npm run dev
+```
+
+Inicia el entorno de desarrollo.
+
+```powershell
+npm run build
+```
+
+Compila TypeScript y genera la build de Vite.
+
+```powershell
+npm run lint
+```
+
+Ejecuta ESLint para revisar el codigo.
+
+```powershell
+npm run preview
+```
+
+Sirve localmente la build generada.
