@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useProductosCatalogo } from "@/hooks/useProductosCatalogo";
-import { AgregarCategoriaDialog } from "./AgregarCategoriaDialog";
-import { AgregarProductoDialog } from "./AgregarProductoDialog";
+import { AgregarCategoriaDialog } from "@/components/productos/AgregarCategoriaDialog";
+import { AgregarProductoDialog } from "@/components/productos/AgregarProductoDialog";
 import { Edit, Trash2 } from "lucide-react";
 import type { Producto } from "@/lib/types";
-import { EditarProductoDialog } from "./EditarProductoDialog";
+import { EditarProductoDialog } from "@/components/productos/EditarProductoDialog";
 
 export function Productos() {
   const {

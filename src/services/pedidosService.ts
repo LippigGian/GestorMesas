@@ -117,6 +117,62 @@ export async function crearPedidoMesa(mesaId: string, personas: number): Promise
   return mapPedido(data);
 }
 
+export async function obtenerPedidosMostradorAbiertos(): Promise<Pedido[]> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .eq("tipo", "mostrador")
+    .eq("estado", "abierto")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map(mapPedido);
+}
+
+export async function crearPedidoMostrador(cliente?: string): Promise<Pedido> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .insert({
+      tipo: "mostrador",
+      estado: "abierto",
+      cliente: cliente?.trim() || null,
+      personas: 0,
+      total: 0,
+    })
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapPedido(data);
+}
+
+export async function actualizarClientePedido(
+  pedidoId: string,
+  cliente: string
+): Promise<Pedido> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .update({
+      cliente: cliente.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pedidoId)
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapPedido(data);
+}
+
 export async function obtenerItemsPedido(pedidoId: string): Promise<PedidoItem[]> {
   const { data, error } = await supabase
     .from("pedido_items")
