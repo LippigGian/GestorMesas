@@ -38,8 +38,16 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
               <UtensilsCrossed className="h-5 w-5" />
             </Button>
           </Link>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
-            <BarChart3 className="h-5 w-5" />
+          <Button
+            asChild
+            variant={location.pathname === "/ventas" ? "secondary" : "ghost"}
+            size="icon"
+            className={navButtonClass}
+            data-active={location.pathname === "/ventas"}
+          >
+            <Link to="/ventas">
+              <BarChart3 className="h-5 w-5" />
+            </Link>
           </Button>
           <Button variant="ghost" size="icon" className={navButtonClass}>
             <Users className="h-5 w-5" />
