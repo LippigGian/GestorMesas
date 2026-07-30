@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import type { Mesa, Pedido, PedidoItem, Producto } from "@/lib/types";
 import { useState, useEffect } from "react";
 import { useCatalogo } from "@/context/CatalogoContext";
-import type { ProductoPendientePedido } from "@/services/pedidosService";
+import type { PagoPedidoInput, ProductoPendientePedido } from "@/services/pedidosService";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { CerrarPedidoDialog } from "@/components/pedidos/CerrarPedidoDialog";
 
 type Props = {
   mesa: Mesa | null;
@@ -14,7 +15,7 @@ type Props = {
   onActualizarCantidadItem: (item: PedidoItem, cantidad: number) => Promise<void> | void;
   onEliminarItem: (itemId: string) => Promise<void> | void;
   onOcuparMesa: (personas: number) => Promise<void> | void;
-  onCerrarMesa: () => Promise<void> | void;
+  onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onAplicarDescuento: () => void;
 };
 
@@ -42,6 +43,7 @@ export function MesaDetalleDialog({
   const [confirmando, setConfirmando] = useState(false);
   const [confirmandoOcupacion, setConfirmandoOcupacion] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
+  const [mostrandoCierre, setMostrandoCierre] = useState(false);
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendientePedido[]>([]);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
@@ -55,6 +57,7 @@ export function MesaDetalleDialog({
     setConfirmando(false);
     setConfirmandoOcupacion(false);
     setItemActualizandoId(null);
+    setMostrandoCierre(false);
   }, [mesa?.id]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
@@ -315,10 +318,18 @@ export function MesaDetalleDialog({
             <Button variant="secondary" onClick={onAplicarDescuento}>
               Aplicar Descuento
             </Button>
-            <Button variant="destructive" onClick={onCerrarMesa}>
+            <Button variant="destructive" onClick={() => setMostrandoCierre(true)}>
               Cerrar Mesa
             </Button>
           </div>
+          <CerrarPedidoDialog
+            items={pedidoItems}
+            open={mostrandoCierre}
+            titulo={`Cerrar mesa ${mesa.numero}`}
+            total={totalConfirmado}
+            onClose={() => setMostrandoCierre(false)}
+            onConfirmar={onCerrarMesa}
+          />
         </>
       ) : (
         <div className="space-y-3 p-4">

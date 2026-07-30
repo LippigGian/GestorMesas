@@ -40,6 +40,12 @@ export type PedidoItem = {
   subtotal: number;
 };
 
+export type MedioPago = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+};
+
 export type Categoria = {
   id: string;
   nombre: string;

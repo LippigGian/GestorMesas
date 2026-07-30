@@ -407,6 +407,7 @@ import {
   eliminarItemPedido,
   obtenerItemsPedido,
   obtenerPedidoAbiertoPorMesa,
+  type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
 
@@ -678,12 +679,12 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     actualizarMesaEnSectores(mesaOcupada);
   };
 
-  const cerrarMesa = async () => {
+  const cerrarMesa = async (pagos: PagoPedidoInput[]) => {
     if (!mesaSeleccionada) return;
     try {
       setErrorMesas(null);
       if (pedidoActivo) {
-        await cerrarPedido(pedidoActivo.id);
+        await cerrarPedido(pedidoActivo.id, pagos);
       }
       await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
     } catch (err) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CerrarPedidoDialog } from '@/components/pedidos/CerrarPedidoDialog';
 import { useCatalogo } from '@/context/CatalogoContext';
 import type { Pedido, PedidoItem, Producto } from '@/lib/types';
 import {
@@ -13,6 +14,7 @@ import {
   eliminarItemPedido,
   obtenerItemsPedido,
   obtenerPedidosMostradorAbiertos,
+  type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
 
@@ -52,6 +54,7 @@ export function Mostrador() {
   const [cargandoPedidos, setCargandoPedidos] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
+  const [mostrandoCierre, setMostrandoCierre] = useState(false);
   const [errorMostrador, setErrorMostrador] = useState<string | null>(null);
   const { cargando: cargandoCatalogo, error: errorCatalogo, productosActivos } = useCatalogo();
 
@@ -234,20 +237,21 @@ export function Mostrador() {
     }
   };
 
-  const finalizarPedido = async () => {
-    if (!pedidoSeleccionado || !window.confirm('Finalizar este pedido de mostrador?')) {
+  const finalizarPedido = async (pagos: PagoPedidoInput[]) => {
+    if (!pedidoSeleccionado) {
       return;
     }
 
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await cerrarPedido(pedidoSeleccionado.id);
+      await cerrarPedido(pedidoSeleccionado.id, pagos);
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
       setPedidoSeleccionado(null);
       setPedidoItems([]);
       setItemsPendientes([]);
       setCliente('');
+      setMostrandoCierre(false);
     } catch (err) {
       setErrorMostrador(err instanceof Error ? err.message : 'No se pudo finalizar el pedido');
     } finally {
@@ -482,10 +486,22 @@ export function Mostrador() {
               </div>
 
               <div className="flex justify-end border-t p-4">
-                <Button disabled={guardando} variant="destructive" onClick={finalizarPedido}>
+                <Button
+                  disabled={guardando}
+                  variant="destructive"
+                  onClick={() => setMostrandoCierre(true)}
+                >
                   Finalizar Pedido
                 </Button>
               </div>
+              <CerrarPedidoDialog
+                items={pedidoItems}
+                open={mostrandoCierre}
+                titulo="Cerrar pedido de mostrador"
+                total={totalConfirmado}
+                onClose={() => setMostrandoCierre(false)}
+                onConfirmar={finalizarPedido}
+              />
             </>
           ) : (
             <div className="grid flex-1 place-items-center p-6 text-center">

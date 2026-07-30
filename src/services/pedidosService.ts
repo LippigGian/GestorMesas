@@ -208,6 +208,11 @@ export type ProductoPendientePedido = {
   cantidad: number;
 };
 
+export type PagoPedidoInput = {
+  medioPagoId: string;
+  monto: number;
+};
+
 export async function confirmarProductosPedido(
   pedidoId: string,
   productos: ProductoPendientePedido[]
@@ -300,8 +305,22 @@ export async function eliminarItemPedido(
   return obtenerItemsPedido(pedidoId);
 }
 
-export async function cerrarPedido(pedidoId: string): Promise<void> {
+export async function cerrarPedido(pedidoId: string, pagos: PagoPedidoInput[] = []): Promise<void> {
   await recalcularTotalPedido(pedidoId);
+
+  if (pagos.length > 0) {
+    const { error: pagosError } = await supabase.from("pedido_pagos").insert(
+      pagos.map((pago) => ({
+        pedido_id: pedidoId,
+        medio_pago_id: pago.medioPagoId,
+        monto: pago.monto,
+      }))
+    );
+
+    if (pagosError) {
+      throw new Error(pagosError.message);
+    }
+  }
 
   const { error } = await supabase
     .from("pedidos")
