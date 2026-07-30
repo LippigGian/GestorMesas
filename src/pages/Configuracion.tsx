@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BriefcaseBusiness, CreditCard, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConfiguracionCajas } from "@/components/configuracion/ConfiguracionCajas";
+import { ConfiguracionTurnos } from "@/components/configuracion/ConfiguracionTurnos";
 import type { MedioPago } from "@/lib/types";
 import {
   activarMedioPago,
@@ -205,7 +206,11 @@ export function Configuracion() {
             </div>
           </div>
 
-          {seccionActivaId === "medios-pago" ? (
+          {seccionActivaId === "cajas" ? (
+            <ConfiguracionCajas />
+          ) : seccionActivaId === "turnos" ? (
+            <ConfiguracionTurnos />
+          ) : seccionActivaId === "medios-pago" ? (
             <div className="space-y-4">
               {errorMediosPago && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

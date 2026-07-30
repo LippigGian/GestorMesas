@@ -46,6 +46,20 @@ export type MedioPago = {
   activo: boolean;
 };
 
+export type Caja = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+};
+
+export type Turno = {
+  id: string;
+  nombre: string;
+  horaInicio: string;
+  horaFin: string;
+  activo: boolean;
+};
+
 export type Categoria = {
   id: string;
   nombre: string;
