@@ -101,3 +101,39 @@ export async function crearProducto(producto: Producto): Promise<Producto> {
 
   return mapProducto(data);
 }
+
+export async function actualizarProducto(producto: Producto): Promise<Producto> {
+  const { data, error } = await supabase
+    .from("productos")
+    .update({
+      categoria_id: producto.categoriaId,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", producto.id)
+    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapProducto(data);
+}
+
+export async function eliminarProducto(productoId: string): Promise<void> {
+  const { error } = await supabase.from("productos").delete().eq("id", productoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function eliminarCategoria(categoriaId: string): Promise<void> {
+  const { error } = await supabase.from("categorias").delete().eq("id", categoriaId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

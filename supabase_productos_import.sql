@@ -23,6 +23,12 @@ create table if not exists public.productos (
   updated_at timestamptz not null default now()
 );
 
+create unique index if not exists categorias_nombre_normalizado_unique
+on public.categorias (lower(btrim(nombre)));
+
+create unique index if not exists productos_categoria_nombre_normalizado_unique
+on public.productos (categoria_id, lower(btrim(nombre)));
+
 alter table public.categorias enable row level security;
 alter table public.productos enable row level security;
 
@@ -49,6 +55,67 @@ begin
     create policy "Permitir lectura publica de productos"
     on public.productos
     for select
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'categorias'
+      and policyname = 'Permitir crear categorias'
+  ) then
+    create policy "Permitir crear categorias"
+    on public.categorias
+    for insert
+    with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'categorias'
+      and policyname = 'Permitir eliminar categorias'
+  ) then
+    create policy "Permitir eliminar categorias"
+    on public.categorias
+    for delete
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'productos'
+      and policyname = 'Permitir crear productos'
+  ) then
+    create policy "Permitir crear productos"
+    on public.productos
+    for insert
+    with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'productos'
+      and policyname = 'Permitir editar productos'
+  ) then
+    create policy "Permitir editar productos"
+    on public.productos
+    for update
+    using (true)
+    with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'productos'
+      and policyname = 'Permitir eliminar productos'
+  ) then
+    create policy "Permitir eliminar productos"
+    on public.productos
+    for delete
     using (true);
   end if;
 end $$;

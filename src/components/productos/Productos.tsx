@@ -3,16 +3,25 @@ import { Button } from "@/components/ui/button";
 import { useProductosCatalogo } from "@/hooks/useProductosCatalogo";
 import { AgregarCategoriaDialog } from "./AgregarCategoriaDialog";
 import { AgregarProductoDialog } from "./AgregarProductoDialog";
+import { Edit, Trash2 } from "lucide-react";
+import type { Producto } from "@/lib/types";
+import { EditarProductoDialog } from "./EditarProductoDialog";
 
 export function Productos() {
   const {
     agregarCategoria,
     agregarProducto,
+    borrarProducto,
+    borrarCategoriaSeleccionada,
     busqueda,
     cargando,
     categorias,
+    categoriaActual,
     categoriaSeleccionada,
+    editarProducto,
     error,
+    guardando,
+    productosEnCategoriaSeleccionada,
     productosFiltrados,
     setBusqueda,
     setCategoriaSeleccionada,
@@ -20,6 +29,7 @@ export function Productos() {
 
   const [mostrarDialogo, setMostrarDialogo] = useState(false);
   const [mostrarDialogoCategoria, setMostrarDialogoCategoria] = useState(false);
+  const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
 
   return (
     <main className="flex min-h-[calc(100vh-128px)]">
@@ -41,11 +51,49 @@ export function Productos() {
           ))}
         </ul>
 
+        {categoriaActual && (
+          <div className="mt-4 rounded-md border bg-background p-3">
+            <div className="mb-2 text-sm font-medium text-foreground">{categoriaActual.nombre}</div>
+            <div className="mb-3 text-xs text-muted-foreground">
+              {productosEnCategoriaSeleccionada.length} productos
+            </div>
+            <Button
+              className="w-full"
+              disabled={guardando || productosEnCategoriaSeleccionada.length > 0}
+              size="sm"
+              type="button"
+              variant="destructive"
+              title={
+                productosEnCategoriaSeleccionada.length > 0
+                  ? "Primero elimina o mueve los productos de esta categoria"
+                  : "Eliminar categoria"
+              }
+              onClick={() => {
+                if (window.confirm(`Eliminar la categoria "${categoriaActual.nombre}"?`)) {
+                  borrarCategoriaSeleccionada();
+                }
+              }}
+            >
+              <Trash2 />
+              Eliminar
+            </Button>
+          </div>
+        )}
+
         <div className="mt-4 space-y-2">
-          <Button className="w-full" onClick={() => setMostrarDialogoCategoria(true)}>
+          <Button
+            className="w-full"
+            disabled={guardando}
+            onClick={() => setMostrarDialogoCategoria(true)}
+          >
             Agregar categoria
           </Button>
-          <Button className="w-full" variant="secondary" onClick={() => setMostrarDialogo(true)}>
+          <Button
+            className="w-full"
+            disabled={guardando || categorias.length === 0}
+            variant="secondary"
+            onClick={() => setMostrarDialogo(true)}
+          >
             Agregar producto
           </Button>
         </div>
@@ -73,12 +121,13 @@ export function Productos() {
             <tr className="bg-secondary text-secondary-foreground">
               <th className="p-2 text-left">Producto</th>
               <th className="p-2 text-right">Precio</th>
+              <th className="w-28 p-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
               <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={2}>
+                <td className="p-4 text-center text-muted-foreground" colSpan={3}>
                   Cargando productos...
                 </td>
               </tr>
@@ -87,11 +136,39 @@ export function Productos() {
                 <tr key={producto.id} className="border-b transition hover:bg-muted/60">
                   <td className="p-2">{producto.nombre}</td>
                   <td className="p-2 text-right">${producto.precio.toLocaleString()}</td>
+                  <td className="p-2">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        disabled={guardando}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                        title="Editar producto"
+                        onClick={() => setProductoEditando(producto)}
+                      >
+                        <Edit />
+                      </Button>
+                      <Button
+                        disabled={guardando}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                        title="Eliminar producto"
+                        onClick={() => {
+                          if (window.confirm(`Eliminar el producto "${producto.nombre}"?`)) {
+                            borrarProducto(producto);
+                          }
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={2}>
+                <td className="p-4 text-center text-muted-foreground" colSpan={3}>
                   No hay productos para mostrar.
                 </td>
               </tr>
@@ -110,6 +187,12 @@ export function Productos() {
         onClose={() => setMostrarDialogo(false)}
         categorias={categorias}
         onSave={agregarProducto}
+      />
+      <EditarProductoDialog
+        categorias={categorias}
+        onClose={() => setProductoEditando(null)}
+        onSave={editarProducto}
+        producto={productoEditando}
       />
     </main>
   );
