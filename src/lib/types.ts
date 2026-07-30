@@ -52,6 +52,19 @@ export type Caja = {
   activo: boolean;
 };
 
+export type ArqueoCaja = {
+  id: string;
+  cajaId: string;
+  cajaNombre?: string;
+  estado: 'abierto' | 'cerrado' | 'cancelado';
+  montoInicial: number;
+  montoFinalDeclarado?: number;
+  totalVentas: number;
+  diferencia?: number;
+  openedAt?: string;
+  closedAt?: string;
+};
+
 export type Turno = {
   id: string;
   nombre: string;
