@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { Categoria } from "@/lib/types";
 
 type Props = {
-  onSave: (categoria: Categoria) => void;
+  onSave: (categoria: Categoria) => Promise<void> | void;
   onCancel: () => void;
 };
 
@@ -14,9 +14,9 @@ export function AgregarCategoriaForm({ onSave, onCancel }: Props) {
   return (
     <form
       className="space-y-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        onSave({
+        await onSave({
           id: crypto.randomUUID(),
           nombre,
         });

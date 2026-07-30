@@ -1,11 +1,11 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { Producto, Categoria } from "@/lib/types";
+import type { Categoria, Producto } from "@/lib/types";
 import { AgregarProductoForm } from "./AgregarProductoForm";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSave: (producto: Producto) => void;
+  onSave: (producto: Producto) => Promise<void> | void;
   categorias: Categoria[];
 };
 
@@ -20,8 +20,8 @@ export function AgregarProductoDialog({ open, onClose, onSave, categorias }: Pro
         <AgregarProductoForm
           categorias={categorias}
           onCancel={onClose}
-          onSave={(producto) => {
-            onSave(producto);
+          onSave={async (producto) => {
+            await onSave(producto);
             onClose();
           }}
         />

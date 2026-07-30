@@ -38,4 +38,10 @@ export type Producto = {
   precio: number;
   categoriaId: string;
   cantidad?: number;
+  descripcion?: string;
+  costo?: number;
+  activo?: boolean;
+  favorito?: boolean;
+  controlaStock?: boolean;
+  stock?: number;
 };

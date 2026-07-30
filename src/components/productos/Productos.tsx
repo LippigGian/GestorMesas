@@ -9,8 +9,10 @@ export function Productos() {
     agregarCategoria,
     agregarProducto,
     busqueda,
+    cargando,
     categorias,
     categoriaSeleccionada,
+    error,
     productosFiltrados,
     setBusqueda,
     setCategoriaSeleccionada,
@@ -52,6 +54,12 @@ export function Productos() {
       <section className="flex-1 p-6">
         <h1 className="mb-4 text-2xl font-bold text-foreground">Productos</h1>
 
+        {error && (
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <input
           type="text"
           placeholder="Filtrar por producto..."
@@ -68,12 +76,26 @@ export function Productos() {
             </tr>
           </thead>
           <tbody>
-            {productosFiltrados.map((producto) => (
-              <tr key={producto.id} className="border-b transition hover:bg-muted/60">
-                <td className="p-2">{producto.nombre}</td>
-                <td className="p-2 text-right">${producto.precio.toLocaleString()}</td>
+            {cargando ? (
+              <tr>
+                <td className="p-4 text-center text-muted-foreground" colSpan={2}>
+                  Cargando productos...
+                </td>
               </tr>
-            ))}
+            ) : productosFiltrados.length > 0 ? (
+              productosFiltrados.map((producto) => (
+                <tr key={producto.id} className="border-b transition hover:bg-muted/60">
+                  <td className="p-2">{producto.nombre}</td>
+                  <td className="p-2 text-right">${producto.precio.toLocaleString()}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="p-4 text-center text-muted-foreground" colSpan={2}>
+                  No hay productos para mostrar.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>

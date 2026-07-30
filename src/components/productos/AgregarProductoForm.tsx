@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 
 type Props = {
   categorias: Categoria[];
-  onSave: (producto: Producto) => void;
+  onSave: (producto: Producto) => Promise<void> | void;
   onCancel: () => void;
 };
 
@@ -18,9 +18,9 @@ export function AgregarProductoForm({ categorias, onSave, onCancel }: Props) {
   return (
     <form
       className="space-y-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        onSave({
+        await onSave({
           id: crypto.randomUUID(),
           nombre,
           precio,
