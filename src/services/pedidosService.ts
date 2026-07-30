@@ -202,6 +202,48 @@ export async function confirmarProductosPedido(
   return obtenerItemsPedido(pedidoId);
 }
 
+export async function actualizarCantidadItemPedido(
+  pedidoId: string,
+  item: PedidoItem,
+  cantidad: number
+): Promise<PedidoItem[]> {
+  const cantidadNormalizada = Math.max(1, Math.floor(cantidad));
+  const { error } = await supabase
+    .from("pedido_items")
+    .update({
+      cantidad: cantidadNormalizada,
+      subtotal: cantidadNormalizada * item.precioUnitario,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", item.id)
+    .eq("pedido_id", pedidoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recalcularTotalPedido(pedidoId);
+  return obtenerItemsPedido(pedidoId);
+}
+
+export async function eliminarItemPedido(
+  pedidoId: string,
+  itemId: string
+): Promise<PedidoItem[]> {
+  const { error } = await supabase
+    .from("pedido_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("pedido_id", pedidoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recalcularTotalPedido(pedidoId);
+  return obtenerItemsPedido(pedidoId);
+}
+
 export async function cerrarPedido(pedidoId: string): Promise<void> {
   await recalcularTotalPedido(pedidoId);
 

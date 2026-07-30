@@ -400,9 +400,11 @@ import {
   obtenerMesas,
 } from '@/services/mesasService';
 import {
+  actualizarCantidadItemPedido,
   confirmarProductosPedido,
   cerrarPedido,
   crearPedidoMesa,
+  eliminarItemPedido,
   obtenerItemsPedido,
   obtenerPedidoAbiertoPorMesa,
   type ProductoPendientePedido,
@@ -725,6 +727,44 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     }
   };
 
+  const actualizarTotalPedidoActivo = (items: PedidoItem[]) => {
+    setPedidoItems(items);
+    setPedidoActivo((prev) =>
+      prev
+        ? {
+            ...prev,
+            total: items.reduce((acc, item) => acc + item.subtotal, 0),
+          }
+        : prev
+    );
+  };
+
+  const actualizarCantidadPedidoItem = async (item: PedidoItem, cantidad: number) => {
+    if (!pedidoActivo) return;
+
+    try {
+      setErrorMesas(null);
+      const items = await actualizarCantidadItemPedido(pedidoActivo.id, item, cantidad);
+      actualizarTotalPedidoActivo(items);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
+      throw err;
+    }
+  };
+
+  const eliminarPedidoItem = async (itemId: string) => {
+    if (!pedidoActivo) return;
+
+    try {
+      setErrorMesas(null);
+      const items = await eliminarItemPedido(pedidoActivo.id, itemId);
+      actualizarTotalPedidoActivo(items);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
+      throw err;
+    }
+  };
+
   const aplicarDescuento = () => {
     if (!mesaSeleccionada) return;
     const nuevas = celdas.map((celda) =>
@@ -894,6 +934,8 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
           pedido={pedidoActivo}
           pedidoItems={pedidoItems}
           onConfirmarProductos={confirmarProductosMesa}
+          onActualizarCantidadItem={actualizarCantidadPedidoItem}
+          onEliminarItem={eliminarPedidoItem}
           onOcuparMesa={ocuparMesa}
           onCerrarMesa={cerrarMesa}
           onAplicarDescuento={aplicarDescuento}

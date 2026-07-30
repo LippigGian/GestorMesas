@@ -5,6 +5,7 @@ import type { Mesa, Pedido, PedidoItem, Producto } from "@/lib/types";
 import { useState, useEffect } from "react";
 import { useCatalogo } from "@/context/CatalogoContext";
 import type { ProductoPendientePedido } from "@/services/pedidosService";
+import { Minus, Plus, Trash2 } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -13,6 +14,8 @@ type Props = {
   pedido: Pedido | null;
   pedidoItems: PedidoItem[];
   onConfirmarProductos: (productos: ProductoPendientePedido[]) => Promise<void> | void;
+  onActualizarCantidadItem: (item: PedidoItem, cantidad: number) => Promise<void> | void;
+  onEliminarItem: (itemId: string) => Promise<void> | void;
   onOcuparMesa: (personas: number) => Promise<void> | void;
   onCerrarMesa: () => Promise<void> | void;
   onAplicarDescuento: () => void;
@@ -33,6 +36,8 @@ export function MesaDetalleDialog({
   pedido,
   pedidoItems,
   onConfirmarProductos,
+  onActualizarCantidadItem,
+  onEliminarItem,
   onOcuparMesa,
   onCerrarMesa,
   onAplicarDescuento,
@@ -41,6 +46,7 @@ export function MesaDetalleDialog({
   const [busqueda, setBusqueda] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const [confirmandoOcupacion, setConfirmandoOcupacion] = useState(false);
+  const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendientePedido[]>([]);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
@@ -53,6 +59,7 @@ export function MesaDetalleDialog({
     setItemsPendientes([]);
     setConfirmando(false);
     setConfirmandoOcupacion(false);
+    setItemActualizandoId(null);
   }, [open]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
@@ -111,6 +118,28 @@ export function MesaDetalleDialog({
     }
   };
 
+  const cambiarCantidadItem = async (item: PedidoItem, cantidad: number) => {
+    try {
+      setItemActualizandoId(item.id);
+      await onActualizarCantidadItem(item, cantidad);
+    } finally {
+      setItemActualizandoId(null);
+    }
+  };
+
+  const eliminarItem = async (item: PedidoItem) => {
+    if (!window.confirm(`Eliminar ${item.nombreProducto} del pedido?`)) {
+      return;
+    }
+
+    try {
+      setItemActualizandoId(item.id);
+      await onEliminarItem(item.id);
+    } finally {
+      setItemActualizandoId(null);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
@@ -124,13 +153,67 @@ export function MesaDetalleDialog({
           mesa.estado === "ocupada" ? (
             <div className="space-y-2">
               <p>Personas: {mesa.personas}</p>
-              <ul className="text-sm space-y-1">
-                {pedidoItems.map((item) => (
-                  <li key={item.id}>
-                    {item.nombreProducto} x{item.cantidad} - ${item.subtotal.toLocaleString()}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-1 text-sm">
+                {pedidoItems.length > 0 ? (
+                  pedidoItems.map((item) => {
+                    const actualizandoEsteItem = itemActualizandoId === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 rounded-md border px-2 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.nombreProducto}</p>
+                          <p className="text-xs text-muted-foreground">
+                            ${item.precioUnitario.toLocaleString()} c/u - $
+                            {item.subtotal.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            disabled={actualizandoEsteItem || item.cantidad <= 1}
+                            size="icon"
+                            title="Restar unidad"
+                            type="button"
+                            variant="outline"
+                            onClick={() => cambiarCantidadItem(item, item.cantidad - 1)}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <span className="grid h-8 min-w-8 place-items-center rounded-md border px-2 font-semibold">
+                            {item.cantidad}
+                          </span>
+                          <Button
+                            disabled={actualizandoEsteItem}
+                            size="icon"
+                            title="Sumar unidad"
+                            type="button"
+                            variant="outline"
+                            onClick={() => cambiarCantidadItem(item, item.cantidad + 1)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            disabled={actualizandoEsteItem}
+                            size="icon"
+                            title="Eliminar producto"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => eliminarItem(item)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-md border border-dashed p-2 text-muted-foreground">
+                    Todavia no hay productos confirmados.
+                  </p>
+                )}
+              </div>
               {itemsPendientes.length > 0 && (
                 <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
                   <p className="mb-1 text-sm font-semibold">Pendiente de confirmar</p>
