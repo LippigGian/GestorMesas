@@ -416,6 +416,7 @@ type Props = {
 };
 
 const CELL_SIZE = 80;
+const CELL_STEP = 112;
 
 function generarCeldas(
   cantidadFilas: number,
@@ -524,6 +525,17 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     setCeldasPorSector((prev) => ({
       ...prev,
       [sectorActual]: nuevas,
+    }));
+  };
+
+  const actualizarMesaEnSectores = (mesaActualizada: Mesa) => {
+    setCeldasPorSector((prev) => ({
+      salon: prev.salon.map((celda) =>
+        celda.mesa?.id === mesaActualizada.id ? { ...celda, mesa: mesaActualizada } : celda
+      ),
+      deck: prev.deck.map((celda) =>
+        celda.mesa?.id === mesaActualizada.id ? { ...celda, mesa: mesaActualizada } : celda
+      ),
     }));
   };
 
@@ -663,15 +675,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
       return;
     }
 
-    const nuevas: Celda[] = celdas.map((celda) =>
-      celda.mesa?.id === mesaSeleccionada.id
-        ? {
-            ...celda,
-            mesa: mesaOcupada,
-          }
-        : celda
-    );
-    actualizarCeldas(nuevas);
+    actualizarMesaEnSectores(mesaOcupada);
   };
 
   const cerrarMesa = async () => {
@@ -687,20 +691,12 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
       return;
     }
 
-    const nuevas: Celda[] = celdas.map((celda) =>
-      celda.mesa?.id === mesaSeleccionada.id
-        ? {
-            ...celda,
-            mesa: {
-              ...celda.mesa,
-              estado: 'libre',
-              personas: 0,
-              productos: [],
-            },
-          }
-        : celda
-    );
-    actualizarCeldas(nuevas);
+    actualizarMesaEnSectores({
+      ...mesaSeleccionada,
+      estado: 'libre',
+      personas: 0,
+      productos: [],
+    });
     setMesaSeleccionada(null);
     setPedidoActivo(null);
     setPedidoItems([]);
@@ -767,180 +763,173 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
   const aplicarDescuento = () => {
     if (!mesaSeleccionada) return;
-    const nuevas = celdas.map((celda) =>
-      celda.mesa?.id === mesaSeleccionada.id
-        ? {
-            ...celda,
-            mesa: {
-              ...celda.mesa,
-              productos: celda.mesa.productos?.map((p) => ({
-                ...p,
-                precio: Math.round(p.precio * 0.9),
-              })),
-            },
-          }
-        : celda
-    );
-    actualizarCeldas(nuevas);
+    const mesaConDescuento: Mesa = {
+      ...mesaSeleccionada,
+      productos: mesaSeleccionada.productos?.map((p) => ({
+        ...p,
+        precio: Math.round(p.precio * 0.9),
+      })),
+    };
+
+    setMesaSeleccionada(mesaConDescuento);
+    actualizarMesaEnSectores(mesaConDescuento);
   };
 
   const mesaActual: Mesa | null = mesaSeleccionada ?? null;
 
   return (
-    <div className="rounded-lg border bg-card p-4 shadow-sm">
-      {errorMesas && (
-        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {errorMesas}
-        </div>
-      )}
-      {cargandoMesas && (
-        <div className="mb-4 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-          Cargando mesas...
-        </div>
-      )}
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <section className="min-w-0 flex-1 overflow-x-auto rounded-lg border bg-card p-4 shadow-sm">
+        {errorMesas && (
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {errorMesas}
+          </div>
+        )}
+        {cargandoMesas && (
+          <div className="mb-4 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+            Cargando mesas...
+          </div>
+        )}
 
-      {modoEdicion && (
-        <div className="mb-4 flex gap-4 rounded-md border bg-muted/40 p-3">
-          <label className="flex flex-col text-sm font-medium text-foreground">
-            Filas
-            <input
-              type="number"
-              min={1}
-              value={cantidadFilas}
-              onChange={(e) => setCantidadFilas(normalizarDimension(Number(e.target.value)))}
-              className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
-            />
-          </label>
-          <label className="flex flex-col text-sm font-medium text-foreground">
-            Columnas
-            <input
-              type="number"
-              min={1}
-              value={cantidadColumnas}
-              onChange={(e) => setCantidadColumnas(normalizarDimension(Number(e.target.value)))}
-              className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
-            />
-          </label>
-        </div>
-      )}
+        {modoEdicion && (
+          <div className="mb-4 flex gap-4 rounded-md border bg-muted/40 p-3">
+            <label className="flex flex-col text-sm font-medium text-foreground">
+              Filas
+              <input
+                type="number"
+                min={1}
+                value={cantidadFilas}
+                onChange={(e) => setCantidadFilas(normalizarDimension(Number(e.target.value)))}
+                className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
+              />
+            </label>
+            <label className="flex flex-col text-sm font-medium text-foreground">
+              Columnas
+              <input
+                type="number"
+                min={1}
+                value={cantidadColumnas}
+                onChange={(e) => setCantidadColumnas(normalizarDimension(Number(e.target.value)))}
+                className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
+              />
+            </label>
+          </div>
+        )}
 
-      <div
-        className={modoEdicion ? 'grid gap-1' : 'relative'}
-        style={
-          modoEdicion
-            ? {
-                gridTemplateColumns: `repeat(${cantidadColumnas}, ${CELL_SIZE}px)`,
-                gridTemplateRows: `repeat(${cantidadFilas}, ${CELL_SIZE}px)`,
-              }
-            : { height: cantidadFilas * CELL_SIZE, width: cantidadColumnas * CELL_SIZE }
-        }
-      >
-        <DndContext onDragEnd={handleDragEnd}>
-          {celdas.map((celda, i) =>
-            modoEdicion ? (
-              <DroppableCelda key={i} id={i.toString()}>
-                {celda.mesa ? (
-                  <div className="relative h-full w-full">
-                    <DraggableMesa id={i.toString()}>
-                      <MesaCard
-                        numero={celda.mesa.numero}
-                        tipo={celda.mesa.tipo}
-                        estado={celda.mesa.estado}
-                      />
-                    </DraggableMesa>
-                    <div className="absolute right-1 top-1 flex gap-1">
-                      <Button
-                        className="h-6 w-6 bg-background/90 text-foreground shadow-sm"
-                        size="icon"
-                        type="button"
-                        variant="outline"
-                        title="Editar mesa"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleAbrirDialogo(i);
-                        }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        className="h-6 w-6 shadow-sm"
-                        size="icon"
-                        type="button"
-                        variant="destructive"
-                        title="Eliminar mesa"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          borrarMesa(i);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+        <div
+          className={modoEdicion ? 'grid gap-4' : 'relative'}
+          style={
+            modoEdicion
+              ? {
+                  gridTemplateColumns: `repeat(${cantidadColumnas}, ${CELL_SIZE}px)`,
+                  gridTemplateRows: `repeat(${cantidadFilas}, ${CELL_SIZE}px)`,
+                }
+              : { height: cantidadFilas * CELL_STEP, width: cantidadColumnas * CELL_STEP }
+          }
+        >
+          <DndContext onDragEnd={handleDragEnd}>
+            {celdas.map((celda, i) =>
+              modoEdicion ? (
+                <DroppableCelda key={i} id={i.toString()}>
+                  {celda.mesa ? (
+                    <div className="relative h-full w-full">
+                      <DraggableMesa id={i.toString()}>
+                        <MesaCard
+                          numero={celda.mesa.numero}
+                          tipo={celda.mesa.tipo}
+                          estado={celda.mesa.estado}
+                        />
+                      </DraggableMesa>
+                      <div className="absolute right-1 top-1 flex gap-1">
+                        <Button
+                          className="h-6 w-6 bg-background/90 text-foreground shadow-sm"
+                          size="icon"
+                          type="button"
+                          variant="outline"
+                          title="Editar mesa"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleAbrirDialogo(i);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          className="h-6 w-6 shadow-sm"
+                          size="icon"
+                          type="button"
+                          variant="destructive"
+                          title="Eliminar mesa"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            borrarMesa(i);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <span
-                    className="grid h-full w-full place-items-center text-2xl font-medium text-muted-foreground transition hover:bg-accent/20 hover:text-primary"
-                    onClick={() => handleAbrirDialogo(i)}
-                  >
-                    +
-                  </span>
-                )}
-              </DroppableCelda>
-            ) : celda.mesa ? (
-              <div
-                key={i}
-                className="absolute"
-                style={{
-                  left: `${celda.x * CELL_SIZE}px`,
-                  top: `${celda.y * CELL_SIZE}px`,
-                  width: `${CELL_SIZE}px`,
-                  height: `${CELL_SIZE}px`,
-                }}
-                onClick={() => {
-                  abrirMesa(celda.mesa!);
-                }}
-              >
-                <MesaCard
-                  numero={celda.mesa.numero}
-                  tipo={celda.mesa.tipo}
-                  estado={celda.mesa.estado}
-                />
-              </div>
-            ) : null
-          )}
-        </DndContext>
+                  ) : (
+                    <span
+                      className="grid h-full w-full place-items-center text-2xl font-medium text-muted-foreground transition hover:bg-accent/20 hover:text-primary"
+                      onClick={() => handleAbrirDialogo(i)}
+                    >
+                      +
+                    </span>
+                  )}
+                </DroppableCelda>
+              ) : celda.mesa ? (
+                <div
+                  key={i}
+                  className={`absolute rounded-lg ${
+                    mesaSeleccionada?.id === celda.mesa.id ? 'ring-4 ring-accent' : ''
+                  }`}
+                  style={{
+                    left: `${celda.x * CELL_STEP}px`,
+                    top: `${celda.y * CELL_STEP}px`,
+                    width: `${CELL_SIZE}px`,
+                    height: `${CELL_SIZE}px`,
+                  }}
+                  onClick={() => {
+                    abrirMesa(celda.mesa!);
+                  }}
+                >
+                  <MesaCard
+                    numero={celda.mesa.numero}
+                    tipo={celda.mesa.tipo}
+                    estado={celda.mesa.estado}
+                  />
+                </div>
+              ) : null
+            )}
+          </DndContext>
 
-        <MesaDialog
-          open={celdaSeleccionada !== null}
-          onClose={() => setCeldaSeleccionada(null)}
-          numeroMesa={numeroMesa}
-          forma={forma}
-          setNumeroMesa={setNumeroMesa}
-          setForma={setForma}
-          onConfirmar={confirmarGuardarMesa}
-          modoEdicion={modoEdicion}
-        />
+          <MesaDialog
+            open={celdaSeleccionada !== null}
+            onClose={() => setCeldaSeleccionada(null)}
+            numeroMesa={numeroMesa}
+            forma={forma}
+            setNumeroMesa={setNumeroMesa}
+            setForma={setForma}
+            onConfirmar={confirmarGuardarMesa}
+            modoEdicion={modoEdicion}
+          />
+        </div>
+      </section>
 
-        <MesaDetalleDialog
-          open={mesaSeleccionada !== null}
-          onClose={() => {
-            setMesaSeleccionada(null);
-            setPedidoActivo(null);
-            setPedidoItems([]);
-          }}
-          mesa={mesaActual}
-          pedido={pedidoActivo}
-          pedidoItems={pedidoItems}
-          onConfirmarProductos={confirmarProductosMesa}
-          onActualizarCantidadItem={actualizarCantidadPedidoItem}
-          onEliminarItem={eliminarPedidoItem}
-          onOcuparMesa={ocuparMesa}
-          onCerrarMesa={cerrarMesa}
-          onAplicarDescuento={aplicarDescuento}
-        />
-      </div>
+      <MesaDetalleDialog
+        mesa={mesaActual}
+        pedido={pedidoActivo}
+        pedidoItems={pedidoItems}
+        onConfirmarProductos={confirmarProductosMesa}
+        onActualizarCantidadItem={actualizarCantidadPedidoItem}
+        onEliminarItem={eliminarPedidoItem}
+        onOcuparMesa={ocuparMesa}
+        onCerrarMesa={cerrarMesa}
+        onAplicarDescuento={aplicarDescuento}
+      />
     </div>
   );
 }
