@@ -1,16 +1,20 @@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { Mesa } from "@/lib/types";
+import type { Mesa, Pedido, PedidoItem, Producto } from "@/lib/types";
 import { useState, useEffect } from "react";
 import { useCatalogo } from "@/context/CatalogoContext";
+import type { ProductoPendientePedido } from "@/services/pedidosService";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   mesa: Mesa | null;
-  onOcuparMesa: (personas: number) => void;
-  onCerrarMesa: () => void;
+  pedido: Pedido | null;
+  pedidoItems: PedidoItem[];
+  onConfirmarProductos: (productos: ProductoPendientePedido[]) => Promise<void> | void;
+  onOcuparMesa: (personas: number) => Promise<void> | void;
+  onCerrarMesa: () => Promise<void> | void;
   onAplicarDescuento: () => void;
 };
 
@@ -26,12 +30,18 @@ export function MesaDetalleDialog({
   open,
   onClose,
   mesa,
+  pedido,
+  pedidoItems,
+  onConfirmarProductos,
   onOcuparMesa,
   onCerrarMesa,
   onAplicarDescuento,
 }: Props) {
   const [cantidadPersonas, setCantidadPersonas] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
+  const [confirmandoOcupacion, setConfirmandoOcupacion] = useState(false);
+  const [itemsPendientes, setItemsPendientes] = useState<ProductoPendientePedido[]>([]);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
   const productosDisponibles = productosActivos.filter(
@@ -40,12 +50,66 @@ export function MesaDetalleDialog({
 
   useEffect(() => {
     setCantidadPersonas(""); // Reiniciar input cada vez que abre
+    setItemsPendientes([]);
+    setConfirmando(false);
+    setConfirmandoOcupacion(false);
   }, [open]);
 
-  const total = mesa?.productos?.reduce(
-    (acc, p) => acc + p.precio * (p.cantidad ?? 1),
+  const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
+  const totalPendiente = itemsPendientes.reduce(
+    (acc, item) => acc + item.precioUnitario * item.cantidad,
     0
-  ) ?? 0;
+  );
+  const total = totalConfirmado + totalPendiente;
+
+  const agregarPendiente = (producto: Producto) => {
+    setItemsPendientes((prev) => {
+      const existente = prev.find((item) => item.productoId === producto.id);
+
+      if (existente) {
+        return prev.map((item) =>
+          item.productoId === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          productoId: producto.id,
+          nombreProducto: producto.nombre,
+          precioUnitario: producto.precio,
+          cantidad: 1,
+        },
+      ];
+    });
+  };
+
+  const confirmarPendientes = async () => {
+    if (itemsPendientes.length === 0) return;
+
+    try {
+      setConfirmando(true);
+      await onConfirmarProductos(itemsPendientes);
+      setItemsPendientes([]);
+    } finally {
+      setConfirmando(false);
+    }
+  };
+
+  const confirmarOcupacion = async () => {
+    const personas = parseInt(cantidadPersonas);
+
+    if (Number.isNaN(personas) || personas <= 0 || confirmandoOcupacion) {
+      return;
+    }
+
+    try {
+      setConfirmandoOcupacion(true);
+      await onOcuparMesa(personas);
+    } finally {
+      setConfirmandoOcupacion(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -61,13 +125,45 @@ export function MesaDetalleDialog({
             <div className="space-y-2">
               <p>Personas: {mesa.personas}</p>
               <ul className="text-sm space-y-1">
-                {mesa.productos?.map((p) => (
-                  <li key={p.id}>
-                    {p.nombre} x{p.cantidad ?? 1} - ${p.precio * (p.cantidad ?? 1)}
+                {pedidoItems.map((item) => (
+                  <li key={item.id}>
+                    {item.nombreProducto} x{item.cantidad} - ${item.subtotal.toLocaleString()}
                   </li>
                 ))}
               </ul>
-              <p className="font-bold">Total: ${total}</p>
+              {itemsPendientes.length > 0 && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
+                  <p className="mb-1 text-sm font-semibold">Pendiente de confirmar</p>
+                  <ul className="space-y-1 text-sm">
+                    {itemsPendientes.map((item) => (
+                      <li key={item.productoId}>
+                        {item.nombreProducto} x{item.cantidad} - $
+                        {(item.precioUnitario * item.cantidad).toLocaleString()}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button
+                      disabled={confirmando}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => setItemsPendientes([])}
+                    >
+                      Cancelar carga
+                    </Button>
+                    <Button
+                      disabled={confirmando}
+                      size="sm"
+                      type="button"
+                      onClick={confirmarPendientes}
+                    >
+                      Confirmar
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <p className="font-bold">Total: ${total.toLocaleString()}</p>
 
               <div className="mt-4 border-t pt-4">
                 <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3>
@@ -100,7 +196,12 @@ export function MesaDetalleDialog({
                               ${producto.precio.toLocaleString()}
                             </p>
                           </div>
-                          <Button size="sm" type="button" variant="secondary">
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="secondary"
+                            onClick={() => agregarPendiente(producto)}
+                          >
                             Agregar
                           </Button>
                         </div>
@@ -132,15 +233,10 @@ export function MesaDetalleDialog({
                 onChange={(e) => setCantidadPersonas(e.target.value)}
               />
               <Button
-                onClick={() => {
-                  const n = parseInt(cantidadPersonas);
-                  if (!isNaN(n) && n > 0) {
-                    onOcuparMesa(n);
-                    onClose();
-                  }
-                }}
+                disabled={confirmandoOcupacion}
+                onClick={confirmarOcupacion}
               >
-                Confirmar
+                {confirmandoOcupacion ? "Confirmando..." : "Confirmar"}
               </Button>
             </div>
           )

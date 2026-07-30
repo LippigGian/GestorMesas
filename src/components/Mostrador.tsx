@@ -4,8 +4,8 @@ import type { Pedido } from '@/lib/types';
 
 export function Mostrador() {
 const pedidosMock: Pedido[] = [
-  { id: 144053, horaInicio: '26/07/25 09:38:40', estado: 'En curso', cliente: 'enemiga de camilo', total: 3900 },
-  { id: 143478, horaInicio: '19/07/25 12:23:37', estado: 'En curso', cliente: 'PRIMO DE OMAR', total: 24500 },
+  { id: '144053', horaInicio: '26/07/25 09:38:40', estado: 'En curso', cliente: 'enemiga de camilo', total: 3900 },
+  { id: '143478', horaInicio: '19/07/25 12:23:37', estado: 'En curso', cliente: 'PRIMO DE OMAR', total: 24500 },
   // Agrega más para pruebas
 ];
 

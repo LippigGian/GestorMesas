@@ -386,6 +386,7 @@ import { MesaCard } from './MesaCard';
 import { MesaDialog } from './MesaDialog';
 import { MesaDetalleDialog } from './MesaDetalleDialog';
 import type { Celda, Mesa } from '@/lib/types';
+import type { Pedido, PedidoItem } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -398,6 +399,14 @@ import {
   guardarMesa,
   obtenerMesas,
 } from '@/services/mesasService';
+import {
+  confirmarProductosPedido,
+  cerrarPedido,
+  crearPedidoMesa,
+  obtenerItemsPedido,
+  obtenerPedidoAbiertoPorMesa,
+  type ProductoPendientePedido,
+} from '@/services/pedidosService';
 
 type Props = {
   modoEdicion: boolean;
@@ -449,6 +458,8 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const [numeroMesa, setNumeroMesa] = useState('');
   const [forma, setForma] = useState<'cuadrada' | 'redonda'>('cuadrada');
   const [mesaSeleccionada, setMesaSeleccionada] = useState<Mesa | null>(null);
+  const [pedidoActivo, setPedidoActivo] = useState<Pedido | null>(null);
+  const [pedidoItems, setPedidoItems] = useState<PedidoItem[]>([]);
   const [cargandoMesas, setCargandoMesas] = useState(true);
   const [errorMesas, setErrorMesas] = useState<string | null>(null);
 
@@ -568,6 +579,25 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     }
   };
 
+  const abrirMesa = async (mesa: Mesa) => {
+    setMesaSeleccionada(mesa);
+    setPedidoActivo(null);
+    setPedidoItems([]);
+
+    if (mesa.estado !== 'ocupada') {
+      return;
+    }
+
+    try {
+      setErrorMesas(null);
+      const pedido = await obtenerPedidoAbiertoPorMesa(mesa.id);
+      setPedidoActivo(pedido);
+      setPedidoItems(pedido ? await obtenerItemsPedido(pedido.id) : []);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
+    }
+  };
+
   const borrarMesa = async (index: number) => {
     const mesa = celdas[index].mesa;
     if (!mesa) return;
@@ -611,28 +641,49 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
   const ocuparMesa = async (personas: number) => {
     if (!mesaSeleccionada) return;
-    await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
+
+    const mesaOcupada: Mesa = {
+      ...mesaSeleccionada,
+      estado: 'ocupada',
+      personas,
+      productos: [],
+    };
+
+    try {
+      setErrorMesas(null);
+      await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
+      const pedido = await crearPedidoMesa(mesaSeleccionada.id, personas);
+      setPedidoActivo(pedido);
+      setPedidoItems([]);
+      setMesaSeleccionada(mesaOcupada);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo ocupar la mesa');
+      return;
+    }
 
     const nuevas: Celda[] = celdas.map((celda) =>
       celda.mesa?.id === mesaSeleccionada.id
         ? {
             ...celda,
-            mesa: {
-              ...celda.mesa,
-              estado: 'ocupada',
-              personas,
-              productos: [],
-            },
+            mesa: mesaOcupada,
           }
         : celda
     );
     actualizarCeldas(nuevas);
-    setMesaSeleccionada(null);
   };
 
   const cerrarMesa = async () => {
     if (!mesaSeleccionada) return;
-    await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+    try {
+      setErrorMesas(null);
+      if (pedidoActivo) {
+        await cerrarPedido(pedidoActivo.id);
+      }
+      await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo cerrar la mesa');
+      return;
+    }
 
     const nuevas: Celda[] = celdas.map((celda) =>
       celda.mesa?.id === mesaSeleccionada.id
@@ -649,6 +700,29 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     );
     actualizarCeldas(nuevas);
     setMesaSeleccionada(null);
+    setPedidoActivo(null);
+    setPedidoItems([]);
+  };
+
+  const confirmarProductosMesa = async (productos: ProductoPendientePedido[]) => {
+    if (!pedidoActivo) return;
+
+    try {
+      setErrorMesas(null);
+      const items = await confirmarProductosPedido(pedidoActivo.id, productos);
+      setPedidoItems(items);
+      setPedidoActivo((prev) =>
+        prev
+          ? {
+              ...prev,
+              total: items.reduce((acc, item) => acc + item.subtotal, 0),
+            }
+          : prev
+      );
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
+      throw err;
+    }
   };
 
   const aplicarDescuento = () => {
@@ -785,7 +859,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
                   height: `${CELL_SIZE}px`,
                 }}
                 onClick={() => {
-                  setMesaSeleccionada(celda.mesa!);
+                  abrirMesa(celda.mesa!);
                 }}
               >
                 <MesaCard
@@ -811,8 +885,15 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
         <MesaDetalleDialog
           open={mesaSeleccionada !== null}
-          onClose={() => setMesaSeleccionada(null)}
+          onClose={() => {
+            setMesaSeleccionada(null);
+            setPedidoActivo(null);
+            setPedidoItems([]);
+          }}
           mesa={mesaActual}
+          pedido={pedidoActivo}
+          pedidoItems={pedidoItems}
+          onConfirmarProductos={confirmarProductosMesa}
           onOcuparMesa={ocuparMesa}
           onCerrarMesa={cerrarMesa}
           onAplicarDescuento={aplicarDescuento}

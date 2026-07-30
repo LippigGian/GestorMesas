@@ -20,11 +20,24 @@ export type Celda = {
 };
 
 export type Pedido = {
-  id: number;
-  horaInicio: string;
-  estado: 'En curso' | 'Finalizado';
-  cliente: string;
+  id: string;
+  horaInicio?: string;
+  estado: 'abierto' | 'cerrado' | 'cancelado' | 'En curso' | 'Finalizado';
+  cliente?: string;
   total: number;
+  mesaId?: string;
+  personas?: number;
+  tipo?: 'mesa' | 'mostrador';
+};
+
+export type PedidoItem = {
+  id: string;
+  pedidoId: string;
+  productoId?: string;
+  nombreProducto: string;
+  precioUnitario: number;
+  cantidad: number;
+  subtotal: number;
 };
 
 export type Categoria = {
