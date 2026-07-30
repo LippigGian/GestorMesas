@@ -47,8 +47,16 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           <Button variant="ghost" size="icon" className={navButtonClass}>
             <Truck className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
-            <Settings className="h-5 w-5" />
+          <Button
+            asChild
+            variant={location.pathname === "/configuracion" ? "secondary" : "ghost"}
+            size="icon"
+            className={navButtonClass}
+            data-active={location.pathname === "/configuracion"}
+          >
+            <Link to="/configuracion">
+              <Settings className="h-5 w-5" />
+            </Link>
           </Button>
         </div>
 
@@ -83,20 +91,6 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           <Button variant="ghost" className={navButtonClass}>
             Delivery
           </Button>
-
-          <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary">
-            {modoEdicion ? (
-              <>
-                <Save className="h-4 w-4" />
-                Guardar
-              </>
-            ) : (
-              <>
-                <Pencil className="h-4 w-4" />
-                Editar
-              </>
-            )}
-          </Button>
         </nav>
 
         <div className="flex items-center gap-2 text-sm text-primary-foreground/85">
@@ -123,6 +117,19 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             data-active={sectorActual === "deck"}
           >
             Deck
+          </Button>
+          <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary">
+            {modoEdicion ? (
+              <>
+                <Save className="h-4 w-4" />
+                Guardar
+              </>
+            ) : (
+              <>
+                <Pencil className="h-4 w-4" />
+                Editar
+              </>
+            )}
           </Button>
         </div>
       )}

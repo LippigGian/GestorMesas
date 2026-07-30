@@ -5,6 +5,7 @@ import MesaManager from './pages/MesaManager'
 import { Navbar } from './components/layout/Navbar'
 import { Mostrador } from './pages/Mostrador'
 import { Productos } from './pages/Productos'
+import { Configuracion } from './pages/Configuracion'
 
 function App() {
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -16,6 +17,7 @@ function App() {
         <Route path="/" element={<MesaManager modoEdicion={modoEdicion} />} />
         <Route path="/mostrador" element={<Mostrador />} />
         <Route path="/productos" element={<Productos />} />
+        <Route path="/configuracion" element={<Configuracion />} />
       </Routes>
     </Router>
   )
