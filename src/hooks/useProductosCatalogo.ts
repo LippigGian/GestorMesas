@@ -9,12 +9,14 @@ import {
   obtenerCategorias,
   obtenerProductos,
 } from "@/services/productosService";
+import { useCatalogo } from "@/context/CatalogoContext";
 
 function normalizarNombre(nombre: string) {
   return nombre.trim().toLocaleLowerCase();
 }
 
 export function useProductosCatalogo() {
+  const { recargarCatalogo } = useCatalogo();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
@@ -110,6 +112,7 @@ export function useProductosCatalogo() {
 
       setCategorias((prev) => [...prev, categoriaCreada]);
       setCategoriaSeleccionada(categoriaCreada.id);
+      await recargarCatalogo();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear la categoria");
       throw err;
@@ -144,6 +147,7 @@ export function useProductosCatalogo() {
       });
 
       setProductos((prev) => [...prev, productoCreado]);
+      await recargarCatalogo();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el producto");
       throw err;
@@ -172,6 +176,7 @@ export function useProductosCatalogo() {
 
       setCategorias(categoriasActualizadas);
       setCategoriaSeleccionada(categoriasActualizadas[0]?.id ?? "");
+      await recargarCatalogo();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar la categoria");
       throw err;
@@ -212,6 +217,7 @@ export function useProductosCatalogo() {
           productoActual.id === productoEditado.id ? productoEditado : productoActual
         )
       );
+      await recargarCatalogo();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo editar el producto");
       throw err;
@@ -228,6 +234,7 @@ export function useProductosCatalogo() {
       await eliminarProducto(producto.id);
 
       setProductos((prev) => prev.filter((productoActual) => productoActual.id !== producto.id));
+      await recargarCatalogo();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar el producto");
       throw err;

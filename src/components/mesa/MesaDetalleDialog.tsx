@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Mesa } from "@/lib/types";
 import { useState, useEffect } from "react";
+import { useCatalogo } from "@/context/CatalogoContext";
 
 type Props = {
   open: boolean;
@@ -13,6 +14,14 @@ type Props = {
   onAplicarDescuento: () => void;
 };
 
+function normalizarBusqueda(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "")
+    .toLocaleLowerCase();
+}
+
 export function MesaDetalleDialog({
   open,
   onClose,
@@ -22,6 +31,12 @@ export function MesaDetalleDialog({
   onAplicarDescuento,
 }: Props) {
   const [cantidadPersonas, setCantidadPersonas] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const { cargando, error, productosActivos } = useCatalogo();
+  const busquedaNormalizada = normalizarBusqueda(busqueda);
+  const productosDisponibles = productosActivos.filter(
+    (producto) => normalizarBusqueda(producto.nombre).includes(busquedaNormalizada)
+  );
 
   useEffect(() => {
     setCantidadPersonas(""); // Reiniciar input cada vez que abre
@@ -53,6 +68,51 @@ export function MesaDetalleDialog({
                 ))}
               </ul>
               <p className="font-bold">Total: ${total}</p>
+
+              <div className="mt-4 border-t pt-4">
+                <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3>
+
+                {error && (
+                  <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <Input
+                  className="mb-2"
+                  placeholder="Buscar producto..."
+                  value={busqueda}
+                  onChange={(event) => setBusqueda(event.target.value)}
+                />
+
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+                  {cargando ? (
+                    <p className="p-2 text-sm text-muted-foreground">Cargando productos...</p>
+                  ) : productosDisponibles.length > 0 ? (
+                    productosDisponibles.map((producto) => (
+                        <div
+                          key={producto.id}
+                          className="flex items-center justify-between rounded-md px-2 py-1 hover:bg-muted"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{producto.nombre}</p>
+                            <p className="text-xs text-muted-foreground">
+                              ${producto.precio.toLocaleString()}
+                            </p>
+                          </div>
+                          <Button size="sm" type="button" variant="secondary">
+                            Agregar
+                          </Button>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="p-2 text-sm text-muted-foreground">
+                      No hay productos para mostrar.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               <DialogFooter className="mt-4">
                 <Button variant="destructive" onClick={onCerrarMesa}>
                   Cerrar Mesa
