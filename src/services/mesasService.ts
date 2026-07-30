@@ -105,3 +105,11 @@ export async function actualizarEstadoMesa(
     throw new Error(error.message);
   }
 }
+
+export async function eliminarMesa(mesaId: string): Promise<void> {
+  const { error } = await supabase.from("mesas").delete().eq("id", mesaId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

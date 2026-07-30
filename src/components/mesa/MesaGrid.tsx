@@ -389,9 +389,12 @@ import type { Celda, Mesa } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
+import { Button } from '@/components/ui/button';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   actualizarEstadoMesa,
   actualizarPosicionMesa,
+  eliminarMesa,
   guardarMesa,
   obtenerMesas,
 } from '@/services/mesasService';
@@ -424,6 +427,10 @@ function generarCeldas(
 function normalizarDimension(value: number) {
   if (!Number.isFinite(value)) return 1;
   return Math.max(1, Math.floor(value));
+}
+
+function normalizarNumeroMesa(numero: string) {
+  return numero.trim().toLocaleLowerCase();
 }
 
 export function MesaGrid({ modoEdicion, sectorActual }: Props) {
@@ -517,35 +524,70 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const confirmarGuardarMesa = async () => {
     if (celdaSeleccionada === null || numeroMesa.trim() === '') return;
 
-    const yaExiste = celdas.some(
-      (c, i) => i !== celdaSeleccionada && c.mesa?.numero === numeroMesa.trim()
+    const celdaActual = celdas[celdaSeleccionada];
+    const mesaEditandoId = celdaActual.mesa?.id;
+    const numeroNormalizado = normalizarNumeroMesa(numeroMesa);
+    const yaExiste = Object.values(celdasPorSector).some((celdasSector) =>
+      celdasSector.some(
+        (celda) =>
+          celda.mesa &&
+          celda.mesa.id !== mesaEditandoId &&
+          normalizarNumeroMesa(celda.mesa.numero) === numeroNormalizado
+      )
     );
+
     if (yaExiste) {
-      alert('Ya existe una mesa con ese número.');
+      alert('Ya existe una mesa con ese numero.');
       return;
     }
 
-    const celdaActual = celdas[celdaSeleccionada];
-    const mesaGuardada = await guardarMesa({
-      id: celdaActual.mesa?.id ?? uuidv4(),
-      numero: numeroMesa.trim(),
-      tipo: forma,
-      estado: celdaActual.mesa?.estado ?? 'libre',
-      personas: celdaActual.mesa?.personas ?? 0,
-      productos: celdaActual.mesa?.productos ?? [],
-      sector: sectorActual,
-      x: celdaActual.x,
-      y: celdaActual.y,
-    });
+    try {
+      setErrorMesas(null);
+      const mesaGuardada = await guardarMesa({
+        id: celdaActual.mesa?.id ?? uuidv4(),
+        numero: numeroMesa.trim(),
+        tipo: forma,
+        estado: celdaActual.mesa?.estado ?? 'libre',
+        personas: celdaActual.mesa?.personas ?? 0,
+        productos: celdaActual.mesa?.productos ?? [],
+        sector: sectorActual,
+        x: celdaActual.x,
+        y: celdaActual.y,
+      });
 
-    const nuevasCeldas = celdas.map((celda, i) =>
-      i === celdaSeleccionada ? { ...celda, mesa: mesaGuardada } : celda
-    );
+      const nuevasCeldas = celdas.map((celda, i) =>
+        i === celdaSeleccionada ? { ...celda, mesa: mesaGuardada } : celda
+      );
 
-    actualizarCeldas(nuevasCeldas);
-    setCeldaSeleccionada(null);
-    setNumeroMesa('');
-    setForma('cuadrada');
+      actualizarCeldas(nuevasCeldas);
+      setCeldaSeleccionada(null);
+      setNumeroMesa('');
+      setForma('cuadrada');
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo guardar la mesa');
+    }
+  };
+
+  const borrarMesa = async (index: number) => {
+    const mesa = celdas[index].mesa;
+    if (!mesa) return;
+
+    if (mesa.estado === 'ocupada') {
+      setErrorMesas('No se puede eliminar una mesa ocupada.');
+      return;
+    }
+
+    if (!window.confirm(`Eliminar la mesa ${mesa.numero}?`)) {
+      return;
+    }
+
+    try {
+      setErrorMesas(null);
+      await eliminarMesa(mesa.id);
+      actualizarCeldas(celdas.map((celda, i) => (i === index ? { ...celda, mesa: undefined } : celda)));
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar la mesa');
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -684,13 +726,45 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
             modoEdicion ? (
               <DroppableCelda key={i} id={i.toString()}>
                 {celda.mesa ? (
-                  <DraggableMesa id={i.toString()}>
-                    <MesaCard
-                      numero={celda.mesa.numero}
-                      tipo={celda.mesa.tipo}
-                      estado={celda.mesa.estado}
-                    />
-                  </DraggableMesa>
+                  <div className="relative h-full w-full">
+                    <DraggableMesa id={i.toString()}>
+                      <MesaCard
+                        numero={celda.mesa.numero}
+                        tipo={celda.mesa.tipo}
+                        estado={celda.mesa.estado}
+                      />
+                    </DraggableMesa>
+                    <div className="absolute right-1 top-1 flex gap-1">
+                      <Button
+                        className="h-6 w-6 bg-background/90 text-foreground shadow-sm"
+                        size="icon"
+                        type="button"
+                        variant="outline"
+                        title="Editar mesa"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleAbrirDialogo(i);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        className="h-6 w-6 shadow-sm"
+                        size="icon"
+                        type="button"
+                        variant="destructive"
+                        title="Eliminar mesa"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          borrarMesa(i);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <span
                     className="grid h-full w-full place-items-center text-2xl font-medium text-muted-foreground transition hover:bg-accent/20 hover:text-primary"

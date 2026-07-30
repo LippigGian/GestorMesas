@@ -34,9 +34,14 @@ create table if not exists public.mesas (
   y integer not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (sector, numero),
   unique (sector, x, y)
 );
+
+alter table public.mesas
+drop constraint if exists mesas_sector_numero_key;
+
+create unique index if not exists mesas_numero_normalizado_unique
+on public.mesas (lower(btrim(numero)));
 
 create unique index if not exists categorias_nombre_normalizado_unique
 on public.categorias (lower(btrim(nombre)));
@@ -170,6 +175,18 @@ begin
     for update
     using (true)
     with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mesas'
+      and policyname = 'Permitir eliminar mesas'
+  ) then
+    create policy "Permitir eliminar mesas"
+    on public.mesas
+    for delete
+    using (true);
   end if;
 end $$;
 
