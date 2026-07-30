@@ -23,6 +23,21 @@ create table if not exists public.productos (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.mesas (
+  id uuid primary key default gen_random_uuid(),
+  numero text not null,
+  tipo text not null check (tipo in ('cuadrada', 'redonda')),
+  estado text not null default 'libre' check (estado in ('libre', 'ocupada')),
+  personas integer not null default 0,
+  sector text not null check (sector in ('salon', 'deck')),
+  x integer not null,
+  y integer not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (sector, numero),
+  unique (sector, x, y)
+);
+
 create unique index if not exists categorias_nombre_normalizado_unique
 on public.categorias (lower(btrim(nombre)));
 
@@ -31,6 +46,7 @@ on public.productos (categoria_id, lower(btrim(nombre)));
 
 alter table public.categorias enable row level security;
 alter table public.productos enable row level security;
+alter table public.mesas enable row level security;
 
 do $$
 begin
@@ -54,6 +70,18 @@ begin
   ) then
     create policy "Permitir lectura publica de productos"
     on public.productos
+    for select
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mesas'
+      and policyname = 'Permitir lectura publica de mesas'
+  ) then
+    create policy "Permitir lectura publica de mesas"
+    on public.mesas
     for select
     using (true);
   end if;
@@ -118,7 +146,45 @@ begin
     for delete
     using (true);
   end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mesas'
+      and policyname = 'Permitir crear mesas'
+  ) then
+    create policy "Permitir crear mesas"
+    on public.mesas
+    for insert
+    with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'mesas'
+      and policyname = 'Permitir editar mesas'
+  ) then
+    create policy "Permitir editar mesas"
+    on public.mesas
+    for update
+    using (true)
+    with check (true);
+  end if;
 end $$;
+
+insert into public.mesas (numero, tipo, sector, x, y)
+select *
+from (
+  values
+    ('1', 'cuadrada', 'salon', 0, 0),
+    ('2', 'redonda', 'salon', 1, 0),
+    ('3', 'cuadrada', 'salon', 2, 1),
+    ('101', 'redonda', 'deck', 0, 0),
+    ('102', 'cuadrada', 'deck', 1, 0),
+    ('103', 'redonda', 'deck', 2, 1)
+) as mesas_iniciales(numero, tipo, sector, x, y)
+where not exists (select 1 from public.mesas);
 
 insert into public.categorias (nombre)
 values

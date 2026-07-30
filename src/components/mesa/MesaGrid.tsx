@@ -389,6 +389,12 @@ import type { Celda, Mesa } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  actualizarEstadoMesa,
+  actualizarPosicionMesa,
+  guardarMesa,
+  obtenerMesas,
+} from '@/services/mesasService';
 
 type Props = {
   modoEdicion: boolean;
@@ -436,6 +442,8 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const [numeroMesa, setNumeroMesa] = useState('');
   const [forma, setForma] = useState<'cuadrada' | 'redonda'>('cuadrada');
   const [mesaSeleccionada, setMesaSeleccionada] = useState<Mesa | null>(null);
+  const [cargandoMesas, setCargandoMesas] = useState(true);
+  const [errorMesas, setErrorMesas] = useState<string | null>(null);
 
   const celdas = celdasPorSector[sectorActual] || [];
 
@@ -447,39 +455,50 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     }));
   }, [cantidadFilas, cantidadColumnas]);
 
-  // Mock inicial
   useEffect(() => {
-    const mesasSalon: Celda[] = [
-    { x: 0, y: 0, mesa: { id: 's1', numero: '1', tipo: 'cuadrada' } },
-    { x: 1, y: 0, mesa: { id: 's2', numero: '2', tipo: 'redonda' } },
-    { x: 2, y: 1, mesa: { id: 's3', numero: '3', tipo: 'cuadrada' } },
-  ];
+    let mounted = true;
 
-  const mesasDeck: Celda[] = [
-    { x: 0, y: 0, mesa: { id: 'd1', numero: '101', tipo: 'redonda' } },
-    { x: 1, y: 0, mesa: { id: 'd2', numero: '102', tipo: 'cuadrada' } },
-    { x: 2, y: 1, mesa: { id: 'd3', numero: '103', tipo: 'redonda' } },
-  ];
+    async function cargarMesas() {
+      try {
+        setCargandoMesas(true);
+        setErrorMesas(null);
+        const mesas = await obtenerMesas();
 
-  //   setCeldasPorSector((prev) => ({
-  //     ...prev,
-  //     salon: prev.salon.map((celda) => {
-  //       const encontrada = mesasMockeadas.find((m) => m.x === celda.x && m.y === celda.y);
-  //       return encontrada ?? celda;
-  //     }),
-  //   }));
-  // }, []);
-  setCeldasPorSector((prev) => ({
-    salon: prev.salon.map((celda) => {
-      const encontrada = mesasSalon.find((m) => m.x === celda.x && m.y === celda.y);
-      return encontrada ?? celda;
-    }),
-    deck: prev.deck.map((celda) => {
-      const encontrada = mesasDeck.find((m) => m.x === celda.x && m.y === celda.y);
-      return encontrada ?? celda;
-    }),
-  }));
-}, []);
+        if (!mounted) {
+          return;
+        }
+
+        setCeldasPorSector((prev) => ({
+          salon: prev.salon.map((celda) => {
+            const encontrada = mesas.find(
+              (mesa) => mesa.sector === 'salon' && mesa.x === celda.x && mesa.y === celda.y
+            );
+            return encontrada ? { ...celda, mesa: encontrada } : celda;
+          }),
+          deck: prev.deck.map((celda) => {
+            const encontrada = mesas.find(
+              (mesa) => mesa.sector === 'deck' && mesa.x === celda.x && mesa.y === celda.y
+            );
+            return encontrada ? { ...celda, mesa: encontrada } : celda;
+          }),
+        }));
+      } catch (err) {
+        if (mounted) {
+          setErrorMesas(err instanceof Error ? err.message : 'No se pudieron cargar las mesas');
+        }
+      } finally {
+        if (mounted) {
+          setCargandoMesas(false);
+        }
+      }
+    }
+
+    cargarMesas();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const actualizarCeldas = (nuevas: Celda[]) => {
     setCeldasPorSector((prev) => ({
@@ -495,7 +514,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     setForma(mesa?.tipo ?? 'cuadrada');
   };
 
-  const confirmarGuardarMesa = () => {
+  const confirmarGuardarMesa = async () => {
     if (celdaSeleccionada === null || numeroMesa.trim() === '') return;
 
     const yaExiste = celdas.some(
@@ -506,17 +525,21 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
       return;
     }
 
+    const celdaActual = celdas[celdaSeleccionada];
+    const mesaGuardada = await guardarMesa({
+      id: celdaActual.mesa?.id ?? uuidv4(),
+      numero: numeroMesa.trim(),
+      tipo: forma,
+      estado: celdaActual.mesa?.estado ?? 'libre',
+      personas: celdaActual.mesa?.personas ?? 0,
+      productos: celdaActual.mesa?.productos ?? [],
+      sector: sectorActual,
+      x: celdaActual.x,
+      y: celdaActual.y,
+    });
+
     const nuevasCeldas = celdas.map((celda, i) =>
-      i === celdaSeleccionada
-        ? {
-            ...celda,
-            mesa: {
-              id: celda.mesa?.id ?? uuidv4(),
-              numero: numeroMesa.trim(),
-              tipo: forma,
-            },
-          }
-        : celda
+      i === celdaSeleccionada ? { ...celda, mesa: mesaGuardada } : celda
     );
 
     actualizarCeldas(nuevasCeldas);
@@ -525,7 +548,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     setForma('cuadrada');
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -541,10 +564,13 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     updated[to].mesa = mesaOrigen;
 
     actualizarCeldas(updated);
+    await actualizarPosicionMesa(mesaOrigen.id, sectorActual, updated[to].x, updated[to].y);
   };
 
-  const ocuparMesa = (personas: number) => {
+  const ocuparMesa = async (personas: number) => {
     if (!mesaSeleccionada) return;
+    await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
+
     const nuevas: Celda[] = celdas.map((celda) =>
       celda.mesa?.id === mesaSeleccionada.id
         ? {
@@ -562,8 +588,10 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     setMesaSeleccionada(null);
   };
 
-  const cerrarMesa = () => {
+  const cerrarMesa = async () => {
     if (!mesaSeleccionada) return;
+    await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+
     const nuevas: Celda[] = celdas.map((celda) =>
       celda.mesa?.id === mesaSeleccionada.id
         ? {
@@ -604,6 +632,17 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
   return (
     <div className="rounded-lg border bg-card p-4 shadow-sm">
+      {errorMesas && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          {errorMesas}
+        </div>
+      )}
+      {cargandoMesas && (
+        <div className="mb-4 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Cargando mesas...
+        </div>
+      )}
+
       {modoEdicion && (
         <div className="mb-4 flex gap-4 rounded-md border bg-muted/40 p-3">
           <label className="flex flex-col text-sm font-medium text-foreground">
