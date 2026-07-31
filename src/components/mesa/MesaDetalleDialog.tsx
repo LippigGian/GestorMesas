@@ -47,6 +47,7 @@ export function MesaDetalleDialog({
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendientePedido[]>([]);
+  const [productoResaltadoIndex, setProductoResaltadoIndex] = useState(0);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
   const productosDisponibles = productosActivos.filter(
@@ -61,6 +62,16 @@ export function MesaDetalleDialog({
     setItemActualizandoId(null);
     setMostrandoCierre(false);
   }, [mesa?.id]);
+
+  useEffect(() => {
+    setProductoResaltadoIndex(0);
+  }, [busquedaNormalizada]);
+
+  useEffect(() => {
+    setProductoResaltadoIndex((prev) =>
+      productosDisponibles.length === 0 ? 0 : Math.min(prev, productosDisponibles.length - 1)
+    );
+  }, [productosDisponibles.length]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
   const totalPendiente = itemsPendientes.reduce(
@@ -89,6 +100,8 @@ export function MesaDetalleDialog({
         },
       ];
     });
+    setBusqueda("");
+    setProductoResaltadoIndex(0);
   };
 
   const confirmarPendientes = async () => {
@@ -280,16 +293,52 @@ export function MesaDetalleDialog({
                 placeholder="Buscar producto..."
                 value={busqueda}
                 onChange={(event) => setBusqueda(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) {
+                    return;
+                  }
+
+                  if (!busquedaNormalizada || cargando || productosDisponibles.length === 0) {
+                    return;
+                  }
+
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setProductoResaltadoIndex((prev) => (prev + 1) % productosDisponibles.length);
+                    return;
+                  }
+
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setProductoResaltadoIndex(
+                      (prev) =>
+                        (prev - 1 + productosDisponibles.length) % productosDisponibles.length
+                    );
+                    return;
+                  }
+
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    agregarPendiente(
+                      productosDisponibles[productoResaltadoIndex] ?? productosDisponibles[0]
+                    );
+                  }
+                }}
               />
 
               <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
                 {cargando ? (
                   <p className="p-2 text-sm text-muted-foreground">Cargando productos...</p>
                 ) : productosDisponibles.length > 0 ? (
-                  productosDisponibles.map((producto) => (
+                  productosDisponibles.map((producto, index) => (
                     <div
                       key={producto.id}
-                      className="flex items-center justify-between rounded-md px-2 py-1 hover:bg-muted"
+                      className={`flex items-center justify-between rounded-md px-2 py-1 transition ${
+                        index === productoResaltadoIndex
+                          ? "bg-primary/10 ring-1 ring-primary/30"
+                          : "hover:bg-muted"
+                      }`}
+                      onMouseEnter={() => setProductoResaltadoIndex(index)}
                     >
                       <div>
                         <p className="text-sm font-medium">{producto.nombre}</p>
