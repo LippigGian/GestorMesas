@@ -70,3 +70,18 @@ on public.pedido_pagos
 for insert
 to anon, authenticated
 with check (true);
+
+drop policy if exists "Permitir actualizar pagos pedido" on public.pedido_pagos;
+create policy "Permitir actualizar pagos pedido"
+on public.pedido_pagos
+for update
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "Permitir eliminar pagos pedido" on public.pedido_pagos;
+create policy "Permitir eliminar pagos pedido"
+on public.pedido_pagos
+for delete
+to anon, authenticated
+using (true);

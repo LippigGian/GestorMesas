@@ -6,7 +6,13 @@ export type TipoVentaFiltro = "todos" | "mesa" | "mostrador";
 
 export type VentaPago = {
   id: string;
+  medioPagoId: string;
   medioPagoNombre: string;
+  monto: number;
+};
+
+export type VentaPagoInput = {
+  medioPagoId: string;
   monto: number;
 };
 
@@ -96,6 +102,7 @@ function mapVenta(row: VentaRow): VentaResumen {
 
       return {
         id: pago.id,
+        medioPagoId: pago.medio_pago_id,
         medioPagoNombre: medio?.nombre ?? "Sin medio",
         monto: Number(pago.monto),
       };
@@ -183,4 +190,111 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
   );
 
   return rows.map(mapVenta);
+}
+
+export async function obtenerVentaPorId(ventaId: string): Promise<VentaResumen> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select(
+      [
+        "id",
+        "tipo",
+        "mesa_id",
+        "estado",
+        "personas",
+        "cliente",
+        "total",
+        "created_at",
+        "closed_at",
+        "turno_id",
+        "arqueo_caja_id",
+        "mesas(numero)",
+        "turnos(nombre)",
+        "pedido_pagos(id, medio_pago_id, monto, medios_pago(nombre))",
+        "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal)",
+      ].join(", ")
+    )
+    .eq("id", ventaId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapVenta(data as unknown as VentaRow);
+}
+
+export async function actualizarPagosVenta(
+  ventaId: string,
+  pagos: VentaPagoInput[]
+): Promise<VentaResumen> {
+  const { data: venta, error: ventaError } = await supabase
+    .from("pedidos")
+    .select("id, estado, total, arqueo_caja_id")
+    .eq("id", ventaId)
+    .single();
+
+  if (ventaError) {
+    throw new Error(ventaError.message);
+  }
+
+  if (venta.estado !== "cerrado") {
+    throw new Error("Solo se pueden editar pagos de ventas cerradas.");
+  }
+
+  if (!venta.arqueo_caja_id) {
+    throw new Error("La venta no tiene arqueo asociado.");
+  }
+
+  const { data: arqueo, error: arqueoError } = await supabase
+    .from("arqueos_caja")
+    .select("estado")
+    .eq("id", venta.arqueo_caja_id)
+    .single();
+
+  if (arqueoError) {
+    throw new Error(arqueoError.message);
+  }
+
+  if (arqueo.estado !== "abierto") {
+    throw new Error("No se pueden editar pagos de una venta con arqueo cerrado.");
+  }
+
+  const total = Number(venta.total);
+  const totalPagos = pagos.reduce((acc, pago) => acc + pago.monto, 0);
+
+  if (pagos.length === 0) {
+    throw new Error("La venta debe tener al menos un pago.");
+  }
+
+  if (pagos.some((pago) => !pago.medioPagoId || !Number.isFinite(pago.monto) || pago.monto <= 0)) {
+    throw new Error("Revisa los medios de pago y montos.");
+  }
+
+  if (Math.abs(totalPagos - total) > 0.01) {
+    throw new Error("La suma de los pagos debe coincidir con el total de la venta.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("pedido_pagos")
+    .delete()
+    .eq("pedido_id", ventaId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  const { error: insertError } = await supabase.from("pedido_pagos").insert(
+    pagos.map((pago) => ({
+      pedido_id: ventaId,
+      medio_pago_id: pago.medioPagoId,
+      monto: pago.monto,
+    }))
+  );
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  return obtenerVentaPorId(ventaId);
 }

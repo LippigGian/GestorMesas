@@ -15,6 +15,7 @@ import { obtenerMesas, type MesaConPosicion } from "@/services/mesasService";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
 import { obtenerTurnos } from "@/services/turnosService";
 import {
+  actualizarPagosVenta,
   obtenerVentas,
   type EstadoVentaFiltro,
   type TipoVentaFiltro,
@@ -308,7 +309,10 @@ function VentasView() {
   const [turnoId, setTurnoId] = useState("");
   const [medioPagoId, setMedioPagoId] = useState("");
   const [mesaId, setMesaId] = useState("");
+  const [editandoPagos, setEditandoPagos] = useState(false);
+  const [medioPagoEdicionId, setMedioPagoEdicionId] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [guardandoPago, setGuardandoPago] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cargarVentas = async () => {
@@ -385,6 +389,49 @@ function VentasView() {
       ventasCobradas,
     };
   }, [ventas]);
+
+  const seleccionarVenta = (venta: VentaResumen) => {
+    setVentaSeleccionada(venta);
+    setEditandoPagos(false);
+    setMedioPagoEdicionId(venta.pagos[0]?.medioPagoId ?? mediosPago[0]?.id ?? "");
+  };
+
+  const iniciarEdicionPagos = () => {
+    if (!ventaSeleccionada) return;
+    setError(null);
+    setMedioPagoEdicionId(ventaSeleccionada.pagos[0]?.medioPagoId ?? mediosPago[0]?.id ?? "");
+    setEditandoPagos(true);
+  };
+
+  const guardarEdicionPagos = async () => {
+    if (!ventaSeleccionada) return;
+
+    if (!medioPagoEdicionId) {
+      setError("Selecciona un medio de pago.");
+      return;
+    }
+
+    try {
+      setGuardandoPago(true);
+      setError(null);
+      const actualizada = await actualizarPagosVenta(ventaSeleccionada.id, [
+        {
+          medioPagoId: medioPagoEdicionId,
+          monto: ventaSeleccionada.total,
+        },
+      ]);
+
+      setVentas((prev) =>
+        prev.map((venta) => (venta.id === actualizada.id ? actualizada : venta))
+      );
+      setVentaSeleccionada(actualizada);
+      setEditandoPagos(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el pago");
+    } finally {
+      setGuardandoPago(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_420px]">
@@ -503,7 +550,7 @@ function VentasView() {
                     className={`cursor-pointer border-b transition hover:bg-muted/50 ${
                       ventaSeleccionada?.id === venta.id ? "bg-accent/20" : ""
                     }`}
-                    onClick={() => setVentaSeleccionada(venta)}
+                    onClick={() => seleccionarVenta(venta)}
                   >
                     <td className="p-3 font-semibold">{formatearFecha(venta.horaInicio)}</td>
                     <td className="p-3">{formatearFecha(venta.horaCierre)}</td>
@@ -529,7 +576,21 @@ function VentasView() {
         </section>
       </section>
 
-      {ventaSeleccionada ? <VentaDetalle venta={ventaSeleccionada} /> : <DetalleVacio />}
+      {ventaSeleccionada ? (
+        <VentaDetalle
+          editandoPagos={editandoPagos}
+          guardandoPago={guardandoPago}
+          medioPagoEdicionId={medioPagoEdicionId}
+          mediosPago={mediosPago}
+          venta={ventaSeleccionada}
+          onCancelarEdicionPagos={() => setEditandoPagos(false)}
+          onEditarPagos={iniciarEdicionPagos}
+          onGuardarPagos={guardarEdicionPagos}
+          setMedioPagoEdicionId={setMedioPagoEdicionId}
+        />
+      ) : (
+        <DetalleVacio />
+      )}
     </div>
   );
 }
@@ -807,7 +868,29 @@ function EstadoVentaBadge({ estado }: { estado: VentaResumen["estado"] }) {
   );
 }
 
-function VentaDetalle({ venta }: { venta: VentaResumen }) {
+function VentaDetalle({
+  editandoPagos,
+  guardandoPago,
+  medioPagoEdicionId,
+  mediosPago,
+  venta,
+  onCancelarEdicionPagos,
+  onEditarPagos,
+  onGuardarPagos,
+  setMedioPagoEdicionId,
+}: {
+  editandoPagos: boolean;
+  guardandoPago: boolean;
+  medioPagoEdicionId: string;
+  mediosPago: MedioPago[];
+  venta: VentaResumen;
+  onCancelarEdicionPagos: () => void;
+  onEditarPagos: () => void;
+  onGuardarPagos: () => void;
+  setMedioPagoEdicionId: (value: string) => void;
+}) {
+  const puedeEditarPagos = venta.estado === "cerrado" && Boolean(venta.arqueoCajaId);
+
   return (
     <aside className="p-6">
       <h2 className="mb-4 text-xl font-bold">Detalle de venta</h2>
@@ -850,8 +933,54 @@ function VentaDetalle({ venta }: { venta: VentaResumen }) {
       </div>
 
       <div className="mt-4 rounded-md border bg-card p-4 text-sm shadow-sm">
-        <h3 className="mb-3 font-semibold">Pagos</h3>
-        {venta.pagos.length > 0 ? (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="font-semibold">Pagos</h3>
+          {!editandoPagos && (
+            <Button
+              disabled={!puedeEditarPagos}
+              size="sm"
+              type="button"
+              variant="secondary"
+              onClick={onEditarPagos}
+            >
+              Editar pago
+            </Button>
+          )}
+        </div>
+        {editandoPagos ? (
+          <div className="space-y-3">
+            <label className="block text-sm font-medium">
+              Medio de pago
+              <select
+                className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+                value={medioPagoEdicionId}
+                onChange={(event) => setMedioPagoEdicionId(event.target.value)}
+              >
+                <option value="">Seleccionar medio</option>
+                {mediosPago.map((medio) => (
+                  <option key={medio.id} value={medio.id}>
+                    {medio.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <DetalleDato label="Importe" value={formatearMoneda(venta.total)} />
+            <div className="flex justify-end gap-2 border-t pt-3">
+              <Button
+                disabled={guardandoPago}
+                size="sm"
+                type="button"
+                variant="secondary"
+                onClick={onCancelarEdicionPagos}
+              >
+                Cancelar
+              </Button>
+              <Button disabled={guardandoPago} size="sm" type="button" onClick={onGuardarPagos}>
+                Guardar
+              </Button>
+            </div>
+          </div>
+        ) : venta.pagos.length > 0 ? (
           <div className="space-y-2">
             {venta.pagos.map((pago) => (
               <DetalleDato
