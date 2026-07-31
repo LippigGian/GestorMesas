@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { BriefcaseBusiness, CreditCard, ShieldCheck, Store, UserRound, UsersRound } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  CreditCard,
+  QrCode,
+  ShieldCheck,
+  Store,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfiguracionCajas } from "@/components/configuracion/ConfiguracionCajas";
@@ -58,6 +66,12 @@ const seccionesConfiguracion: ConfiguracionSeccion[] = [
     nombre: "Medios de pago",
     descripcion: "Efectivo, tarjetas, transferencias y otros medios.",
     icono: CreditCard,
+  },
+  {
+    id: "mercado-pago",
+    nombre: "Mercado Pago",
+    descripcion: "Configuracion futura de QR, credenciales y webhooks.",
+    icono: QrCode,
   },
   {
     id: "proveedores",
@@ -415,6 +429,28 @@ export function Configuracion() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          ) : seccionActivaId === "mercado-pago" ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                Esta seccion queda preparada para configurar Mercado Pago mas adelante.
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border p-4">
+                  <h3 className="font-semibold text-foreground">QR dinamico</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Aca podremos activar la generacion de QR para cerrar pedidos.
+                  </p>
+                </div>
+
+                <div className="rounded-md border p-4">
+                  <h3 className="font-semibold text-foreground">Webhooks</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Aca podremos guardar el estado de integracion para recibir pagos aprobados.
+                  </p>
+                </div>
               </div>
             </div>
           ) : seccionActivaId === "proveedores" ? (
