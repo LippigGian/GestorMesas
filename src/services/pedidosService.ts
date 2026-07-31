@@ -47,7 +47,7 @@ function mapPedidoItem(row: PedidoItemRow): PedidoItem {
   };
 }
 
-async function recalcularTotalPedido(pedidoId: string) {
+async function recalcularTotalPedido(pedidoId: string): Promise<number> {
   const { data, error } = await supabase
     .from("pedido_items")
     .select("subtotal")
@@ -62,6 +62,81 @@ async function recalcularTotalPedido(pedidoId: string) {
     .from("pedidos")
     .update({ total, updated_at: new Date().toISOString() })
     .eq("id", pedidoId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  return total;
+}
+
+async function obtenerArqueoAbiertoParaVenta() {
+  const { data, error } = await supabase
+    .from("arqueos_caja")
+    .select("id")
+    .eq("estado", "abierto");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error("No hay un arqueo de caja abierto. Abri un arqueo antes de cerrar ventas.");
+  }
+
+  if (data.length > 1) {
+    throw new Error("Hay mas de un arqueo abierto. Cierra o selecciona una caja antes de vender.");
+  }
+
+  return data[0].id as string;
+}
+
+function horaEnTurno(hora: string, inicio: string, fin: string) {
+  const horaNormalizada = hora.slice(0, 5);
+  const inicioNormalizado = inicio.slice(0, 5);
+  const finNormalizado = fin.slice(0, 5);
+
+  if (inicioNormalizado < finNormalizado) {
+    return horaNormalizada >= inicioNormalizado && horaNormalizada < finNormalizado;
+  }
+
+  return horaNormalizada >= inicioNormalizado || horaNormalizada < finNormalizado;
+}
+
+async function obtenerTurnoParaFecha(fecha: Date): Promise<string | null> {
+  const hora = fecha.toTimeString().slice(0, 5);
+  const { data, error } = await supabase
+    .from("turnos")
+    .select("id, hora_inicio, hora_fin")
+    .eq("activo", true);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const turno = (data ?? []).find((item) =>
+    horaEnTurno(hora, String(item.hora_inicio), String(item.hora_fin))
+  );
+
+  return turno?.id ?? null;
+}
+
+async function recalcularTotalArqueo(arqueoCajaId: string) {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("total")
+    .eq("arqueo_caja_id", arqueoCajaId)
+    .eq("estado", "cerrado");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const totalVentas = (data ?? []).reduce((acc, pedido) => acc + Number(pedido.total), 0);
+  const { error: updateError } = await supabase
+    .from("arqueos_caja")
+    .update({ total_ventas: totalVentas, updated_at: new Date().toISOString() })
+    .eq("id", arqueoCajaId);
 
   if (updateError) {
     throw new Error(updateError.message);
@@ -306,7 +381,15 @@ export async function eliminarItemPedido(
 }
 
 export async function cerrarPedido(pedidoId: string, pagos: PagoPedidoInput[] = []): Promise<void> {
-  await recalcularTotalPedido(pedidoId);
+  const total = await recalcularTotalPedido(pedidoId);
+  const arqueoCajaId = await obtenerArqueoAbiertoParaVenta();
+  const closedAt = new Date();
+  const turnoId = await obtenerTurnoParaFecha(closedAt);
+  const totalPagos = pagos.reduce((acc, pago) => acc + pago.monto, 0);
+
+  if (pagos.length === 0 || Math.abs(totalPagos - total) > 0.01) {
+    throw new Error("Los pagos deben coincidir con el total de la venta.");
+  }
 
   if (pagos.length > 0) {
     const { error: pagosError } = await supabase.from("pedido_pagos").insert(
@@ -326,12 +409,16 @@ export async function cerrarPedido(pedidoId: string, pagos: PagoPedidoInput[] = 
     .from("pedidos")
     .update({
       estado: "cerrado",
-      closed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      arqueo_caja_id: arqueoCajaId,
+      turno_id: turnoId,
+      closed_at: closedAt.toISOString(),
+      updated_at: closedAt.toISOString(),
     })
     .eq("id", pedidoId);
 
   if (error) {
     throw new Error(error.message);
   }
+
+  await recalcularTotalArqueo(arqueoCajaId);
 }

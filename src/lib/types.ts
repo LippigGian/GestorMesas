@@ -65,6 +65,16 @@ export type ArqueoCaja = {
   closedAt?: string;
 };
 
+export type ArqueoCajaMedioPago = {
+  id?: string;
+  arqueoCajaId: string;
+  medioPagoId: string;
+  medioPagoNombre?: string;
+  montoSistema: number;
+  montoDeclarado: number;
+  diferencia: number;
+};
+
 export type Turno = {
   id: string;
   nombre: string;

@@ -157,6 +157,55 @@ to anon, authenticated
 using (true)
 with check (true);
 
+create table if not exists public.arqueo_caja_medios_pago (
+  id uuid primary key default gen_random_uuid(),
+  arqueo_caja_id uuid not null references public.arqueos_caja(id) on delete cascade,
+  medio_pago_id uuid not null references public.medios_pago(id),
+  monto_sistema numeric(12, 2) not null default 0,
+  monto_declarado numeric(12, 2) not null default 0,
+  diferencia numeric(12, 2) not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (arqueo_caja_id, medio_pago_id)
+);
+
+create index if not exists arqueo_caja_medios_pago_arqueo_idx
+on public.arqueo_caja_medios_pago (arqueo_caja_id);
+
+create index if not exists arqueo_caja_medios_pago_medio_idx
+on public.arqueo_caja_medios_pago (medio_pago_id);
+
+alter table public.arqueo_caja_medios_pago enable row level security;
+
+drop policy if exists "Permitir lectura arqueo medios pago" on public.arqueo_caja_medios_pago;
+create policy "Permitir lectura arqueo medios pago"
+on public.arqueo_caja_medios_pago
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "Permitir insertar arqueo medios pago" on public.arqueo_caja_medios_pago;
+create policy "Permitir insertar arqueo medios pago"
+on public.arqueo_caja_medios_pago
+for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "Permitir actualizar arqueo medios pago" on public.arqueo_caja_medios_pago;
+create policy "Permitir actualizar arqueo medios pago"
+on public.arqueo_caja_medios_pago
+for update
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "Permitir eliminar arqueo medios pago" on public.arqueo_caja_medios_pago;
+create policy "Permitir eliminar arqueo medios pago"
+on public.arqueo_caja_medios_pago
+for delete
+to anon, authenticated
+using (true);
+
 alter table public.pedidos
 add column if not exists turno_id uuid references public.turnos(id),
 add column if not exists arqueo_caja_id uuid references public.arqueos_caja(id);

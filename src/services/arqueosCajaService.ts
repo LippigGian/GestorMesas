@@ -1,4 +1,4 @@
-import type { ArqueoCaja } from "@/lib/types";
+import type { ArqueoCaja, ArqueoCajaMedioPago } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
 type ArqueoCajaRow = {
@@ -12,6 +12,16 @@ type ArqueoCajaRow = {
   opened_at: string | null;
   closed_at: string | null;
   cajas?: { nombre: string } | { nombre: string }[] | null;
+};
+
+type ArqueoCajaMedioPagoRow = {
+  id: string;
+  arqueo_caja_id: string;
+  medio_pago_id: string;
+  monto_sistema: number;
+  monto_declarado: number;
+  diferencia: number;
+  medios_pago?: { nombre: string } | { nombre: string }[] | null;
 };
 
 function mapArqueo(row: ArqueoCajaRow): ArqueoCaja {
@@ -35,6 +45,20 @@ function mapArqueo(row: ArqueoCajaRow): ArqueoCaja {
 const selectArqueo =
   "id, caja_id, estado, monto_inicial, monto_final_declarado, total_ventas, diferencia, opened_at, closed_at, cajas(nombre)";
 
+function mapArqueoMedioPago(row: ArqueoCajaMedioPagoRow): ArqueoCajaMedioPago {
+  const medio = Array.isArray(row.medios_pago) ? row.medios_pago[0] : row.medios_pago;
+
+  return {
+    id: row.id,
+    arqueoCajaId: row.arqueo_caja_id,
+    medioPagoId: row.medio_pago_id,
+    medioPagoNombre: medio?.nombre,
+    montoSistema: Number(row.monto_sistema),
+    montoDeclarado: Number(row.monto_declarado),
+    diferencia: Number(row.diferencia),
+  };
+}
+
 export async function obtenerArqueosCaja(): Promise<ArqueoCaja[]> {
   const { data, error } = await supabase
     .from("arqueos_caja")
@@ -48,12 +72,58 @@ export async function obtenerArqueosCaja(): Promise<ArqueoCaja[]> {
   return (data ?? []).map((row) => mapArqueo(row as ArqueoCajaRow));
 }
 
+async function obtenerMontosSistemaPorMedio(arqueoId: string) {
+  const { data: pedidos, error: pedidosError } = await supabase
+    .from("pedidos")
+    .select("id")
+    .eq("arqueo_caja_id", arqueoId)
+    .eq("estado", "cerrado");
+
+  if (pedidosError) {
+    throw new Error(pedidosError.message);
+  }
+
+  const pedidoIds = (pedidos ?? []).map((pedido) => pedido.id);
+  const montos = new Map<string, number>();
+
+  if (pedidoIds.length === 0) {
+    return montos;
+  }
+
+  const { data: pagos, error: pagosError } = await supabase
+    .from("pedido_pagos")
+    .select("medio_pago_id, monto")
+    .in("pedido_id", pedidoIds);
+
+  if (pagosError) {
+    throw new Error(pagosError.message);
+  }
+
+  for (const pago of pagos ?? []) {
+    const medioPagoId = String(pago.medio_pago_id);
+    montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) + Number(pago.monto));
+  }
+
+  return montos;
+}
+
 export async function crearArqueoCaja(input: {
   cajaId: string;
   montoInicial: number;
+  openedAt: string;
 }): Promise<ArqueoCaja> {
   if (!input.cajaId) {
     throw new Error("Selecciona una caja.");
+  }
+
+  if (!input.openedAt) {
+    throw new Error("Selecciona la fecha y hora de apertura.");
+  }
+
+  const openedAt = new Date(input.openedAt);
+
+  if (Number.isNaN(openedAt.getTime())) {
+    throw new Error("La fecha y hora de apertura no es valida.");
   }
 
   const { data, error } = await supabase
@@ -62,7 +132,7 @@ export async function crearArqueoCaja(input: {
       caja_id: input.cajaId,
       estado: "abierto",
       monto_inicial: input.montoInicial,
-      opened_at: new Date().toISOString(),
+      opened_at: openedAt.toISOString(),
     })
     .select(selectArqueo)
     .single();
@@ -80,7 +150,7 @@ export async function crearArqueoCaja(input: {
 
 export async function cerrarArqueoCaja(input: {
   arqueoId: string;
-  montoFinalDeclarado: number;
+  declaraciones: Array<{ medioPagoId: string; montoDeclarado: number }>;
 }): Promise<ArqueoCaja> {
   const { data: arqueoActual, error: obtenerError } = await supabase
     .from("arqueos_caja")
@@ -92,13 +162,50 @@ export async function cerrarArqueoCaja(input: {
     throw new Error(obtenerError.message);
   }
 
+  const montosSistema = await obtenerMontosSistemaPorMedio(input.arqueoId);
   const totalVentas = Number(arqueoActual.total_ventas);
-  const diferencia = input.montoFinalDeclarado - totalVentas;
+  const montoFinalDeclarado = input.declaraciones.reduce(
+    (acc, declaracion) => acc + declaracion.montoDeclarado,
+    0
+  );
+  const diferencia = montoFinalDeclarado - totalVentas;
+
+  const registros = input.declaraciones.map((declaracion) => {
+    const montoSistema = montosSistema.get(declaracion.medioPagoId) ?? 0;
+
+    return {
+      arqueo_caja_id: input.arqueoId,
+      medio_pago_id: declaracion.medioPagoId,
+      monto_sistema: montoSistema,
+      monto_declarado: declaracion.montoDeclarado,
+      diferencia: declaracion.montoDeclarado - montoSistema,
+    };
+  });
+
+  const { error: deleteError } = await supabase
+    .from("arqueo_caja_medios_pago")
+    .delete()
+    .eq("arqueo_caja_id", input.arqueoId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  if (registros.length > 0) {
+    const { error: insertError } = await supabase
+      .from("arqueo_caja_medios_pago")
+      .insert(registros);
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+  }
+
   const { data, error } = await supabase
     .from("arqueos_caja")
     .update({
       estado: "cerrado",
-      monto_final_declarado: input.montoFinalDeclarado,
+      monto_final_declarado: montoFinalDeclarado,
       diferencia,
       closed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -112,4 +219,50 @@ export async function cerrarArqueoCaja(input: {
   }
 
   return mapArqueo(data as ArqueoCajaRow);
+}
+
+export async function obtenerDetalleMediosPagoArqueo(
+  arqueoId: string
+): Promise<ArqueoCajaMedioPago[]> {
+  const { data, error } = await supabase
+    .from("arqueo_caja_medios_pago")
+    .select(
+      "id, arqueo_caja_id, medio_pago_id, monto_sistema, monto_declarado, diferencia, medios_pago(nombre)"
+    )
+    .eq("arqueo_caja_id", arqueoId)
+    .order("created_at");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => mapArqueoMedioPago(row as ArqueoCajaMedioPagoRow));
+}
+
+export async function obtenerMontosSistemaMediosPagoArqueo(
+  arqueoId: string
+): Promise<ArqueoCajaMedioPago[]> {
+  const montosSistema = await obtenerMontosSistemaPorMedio(arqueoId);
+  const { data, error } = await supabase
+    .from("medios_pago")
+    .select("id, nombre")
+    .eq("activo", true)
+    .order("nombre");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((medio) => {
+    const montoSistema = montosSistema.get(String(medio.id)) ?? 0;
+
+    return {
+      arqueoCajaId: arqueoId,
+      medioPagoId: String(medio.id),
+      medioPagoNombre: String(medio.nombre),
+      montoSistema,
+      montoDeclarado: 0,
+      diferencia: -montoSistema,
+    };
+  });
 }
