@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Filter, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeft, Filter, Plus, ReceiptText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ArqueoCaja, ArqueoCajaMedioPago, Caja, MedioPago } from "@/lib/types";
@@ -23,6 +23,12 @@ import {
 } from "@/services/ventasService";
 
 type VentasTab = "ventas" | "movimientos" | "arqueos" | "descuentos";
+
+type PagoEdicion = {
+  id: string;
+  medioPagoId: string;
+  monto: string;
+};
 
 function formatearFecha(value?: string) {
   if (!value) return "-";
@@ -75,6 +81,53 @@ function parseMonto(value: string, campo: string, permiteVacio = false) {
   }
 
   return monto;
+}
+
+function crearPagoEdicionId() {
+  return crypto.randomUUID();
+}
+
+function agruparPagosPorMedio(venta: VentaResumen) {
+  const pagosAgrupados = new Map<
+    string,
+    { medioPagoId: string; medioPagoNombre: string; monto: number }
+  >();
+
+  for (const pago of venta.pagos) {
+    const actual = pagosAgrupados.get(pago.medioPagoId);
+
+    if (actual) {
+      actual.monto += pago.monto;
+    } else {
+      pagosAgrupados.set(pago.medioPagoId, {
+        medioPagoId: pago.medioPagoId,
+        medioPagoNombre: pago.medioPagoNombre,
+        monto: pago.monto,
+      });
+    }
+  }
+
+  return Array.from(pagosAgrupados.values());
+}
+
+function crearPagosEdicionDesdeVenta(venta: VentaResumen, medioPagoDefaultId: string) {
+  const pagosAgrupados = agruparPagosPorMedio(venta);
+
+  if (pagosAgrupados.length === 0) {
+    return [
+      {
+        id: crearPagoEdicionId(),
+        medioPagoId: medioPagoDefaultId,
+        monto: String(venta.total),
+      },
+    ];
+  }
+
+  return pagosAgrupados.map((pago) => ({
+    id: crearPagoEdicionId(),
+    medioPagoId: pago.medioPagoId,
+    monto: String(pago.monto),
+  }));
 }
 
 export function Ventas() {
@@ -318,10 +371,11 @@ function VentasView() {
   const [medioPagoId, setMedioPagoId] = useState("");
   const [mesaId, setMesaId] = useState("");
   const [editandoPagos, setEditandoPagos] = useState(false);
-  const [medioPagoEdicionId, setMedioPagoEdicionId] = useState("");
+  const [pagosEdicion, setPagosEdicion] = useState<PagoEdicion[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardandoPago, setGuardandoPago] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorPagos, setErrorPagos] = useState<string | null>(null);
 
   const cargarVentas = async () => {
     try {
@@ -401,41 +455,97 @@ function VentasView() {
   const seleccionarVenta = (venta: VentaResumen) => {
     setVentaSeleccionada(venta);
     setEditandoPagos(false);
-    setMedioPagoEdicionId(venta.pagos[0]?.medioPagoId ?? mediosPago[0]?.id ?? "");
+    setErrorPagos(null);
+    setPagosEdicion(crearPagosEdicionDesdeVenta(venta, mediosPago[0]?.id ?? ""));
   };
 
   const iniciarEdicionPagos = () => {
     if (!ventaSeleccionada) return;
     setError(null);
-    setMedioPagoEdicionId(ventaSeleccionada.pagos[0]?.medioPagoId ?? mediosPago[0]?.id ?? "");
+    setErrorPagos(null);
+    setPagosEdicion(crearPagosEdicionDesdeVenta(ventaSeleccionada, mediosPago[0]?.id ?? ""));
     setEditandoPagos(true);
+  };
+
+  const actualizarPagoEdicion = (pagoId: string, patch: Partial<Omit<PagoEdicion, "id">>) => {
+    setErrorPagos(null);
+    setPagosEdicion((prev) =>
+      prev.map((pago) => (pago.id === pagoId ? { ...pago, ...patch } : pago))
+    );
+  };
+
+  const agregarPagoEdicion = () => {
+    setErrorPagos(null);
+    const totalActual = pagosEdicion.reduce((acc, pago) => {
+      const monto = Number(pago.monto.replace(",", "."));
+      return acc + (Number.isFinite(monto) ? monto : 0);
+    }, 0);
+    const restante = ventaSeleccionada ? Math.max(0, ventaSeleccionada.total - totalActual) : 0;
+
+    setPagosEdicion((prev) => [
+      ...prev,
+      {
+        id: crearPagoEdicionId(),
+        medioPagoId: mediosPago[0]?.id ?? "",
+        monto: restante > 0 ? String(restante) : "",
+      },
+    ]);
+  };
+
+  const quitarPagoEdicion = (pagoId: string) => {
+    setErrorPagos(null);
+    setPagosEdicion((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((pago) => pago.id !== pagoId);
+    });
   };
 
   const guardarEdicionPagos = async () => {
     if (!ventaSeleccionada) return;
 
-    if (!medioPagoEdicionId) {
-      setError("Selecciona un medio de pago.");
+    if (pagosEdicion.length === 0) {
+      setErrorPagos("Agrega al menos un pago.");
+      return;
+    }
+
+    if (pagosEdicion.some((pago) => !pago.medioPagoId)) {
+      setErrorPagos("Selecciona un medio de pago en cada linea.");
+      return;
+    }
+
+    let pagosNormalizados: Array<{ medioPagoId: string; monto: number }> = [];
+
+    try {
+      pagosNormalizados = pagosEdicion.map((pago) => ({
+        medioPagoId: pago.medioPagoId,
+        monto: parseMonto(pago.monto, "El importe del pago"),
+      }));
+    } catch (err) {
+      setErrorPagos(err instanceof Error ? err.message : "Revisa los importes de pago.");
+      return;
+    }
+
+    const totalPagos = pagosNormalizados.reduce((acc, pago) => acc + pago.monto, 0);
+
+    if (Math.abs(totalPagos - ventaSeleccionada.total) > 0.01) {
+      setErrorPagos("La suma de los pagos debe coincidir con el total de la venta.");
       return;
     }
 
     try {
       setGuardandoPago(true);
       setError(null);
-      const actualizada = await actualizarPagosVenta(ventaSeleccionada.id, [
-        {
-          medioPagoId: medioPagoEdicionId,
-          monto: ventaSeleccionada.total,
-        },
-      ]);
+      setErrorPagos(null);
+      const actualizada = await actualizarPagosVenta(ventaSeleccionada.id, pagosNormalizados);
 
       setVentas((prev) =>
         prev.map((venta) => (venta.id === actualizada.id ? actualizada : venta))
       );
       setVentaSeleccionada(actualizada);
+      setPagosEdicion(crearPagosEdicionDesdeVenta(actualizada, mediosPago[0]?.id ?? ""));
       setEditandoPagos(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el pago");
+      setErrorPagos(err instanceof Error ? err.message : "No se pudo actualizar el pago");
     } finally {
       setGuardandoPago(false);
     }
@@ -587,14 +697,17 @@ function VentasView() {
       {ventaSeleccionada ? (
         <VentaDetalle
           editandoPagos={editandoPagos}
+          errorPagos={errorPagos}
           guardandoPago={guardandoPago}
-          medioPagoEdicionId={medioPagoEdicionId}
           mediosPago={mediosPago}
+          pagosEdicion={pagosEdicion}
           venta={ventaSeleccionada}
+          onAgregarPagoEdicion={agregarPagoEdicion}
           onCancelarEdicionPagos={() => setEditandoPagos(false)}
           onEditarPagos={iniciarEdicionPagos}
           onGuardarPagos={guardarEdicionPagos}
-          setMedioPagoEdicionId={setMedioPagoEdicionId}
+          onQuitarPagoEdicion={quitarPagoEdicion}
+          onActualizarPagoEdicion={actualizarPagoEdicion}
         />
       ) : (
         <DetalleVacio />
@@ -886,26 +999,39 @@ function EstadoVentaBadge({ estado }: { estado: VentaResumen["estado"] }) {
 
 function VentaDetalle({
   editandoPagos,
+  errorPagos,
   guardandoPago,
-  medioPagoEdicionId,
   mediosPago,
+  pagosEdicion,
   venta,
+  onAgregarPagoEdicion,
   onCancelarEdicionPagos,
   onEditarPagos,
   onGuardarPagos,
-  setMedioPagoEdicionId,
+  onQuitarPagoEdicion,
+  onActualizarPagoEdicion,
 }: {
   editandoPagos: boolean;
+  errorPagos: string | null;
   guardandoPago: boolean;
-  medioPagoEdicionId: string;
   mediosPago: MedioPago[];
+  pagosEdicion: PagoEdicion[];
   venta: VentaResumen;
+  onAgregarPagoEdicion: () => void;
   onCancelarEdicionPagos: () => void;
   onEditarPagos: () => void;
   onGuardarPagos: () => void;
-  setMedioPagoEdicionId: (value: string) => void;
+  onQuitarPagoEdicion: (pagoId: string) => void;
+  onActualizarPagoEdicion: (pagoId: string, patch: Partial<Omit<PagoEdicion, "id">>) => void;
 }) {
-  const puedeEditarPagos = venta.estado === "cerrado" && Boolean(venta.arqueoCajaId);
+  const puedeEditarPagos =
+    venta.estado === "cerrado" && venta.pagos.some((pago) => Boolean(pago.arqueoCajaId));
+  const pagosAgrupados = agruparPagosPorMedio(venta);
+  const totalPagosEdicion = pagosEdicion.reduce((acc, pago) => {
+    const monto = Number(pago.monto.replace(",", "."));
+    return acc + (Number.isFinite(monto) ? monto : 0);
+  }, 0);
+  const diferenciaPagosEdicion = totalPagosEdicion - venta.total;
 
   return (
     <aside className="p-6">
@@ -965,22 +1091,72 @@ function VentaDetalle({
         </div>
         {editandoPagos ? (
           <div className="space-y-3">
-            <label className="block text-sm font-medium">
-              Medio de pago
-              <select
-                className="mt-1 h-10 w-full rounded-md border bg-background px-3"
-                value={medioPagoEdicionId}
-                onChange={(event) => setMedioPagoEdicionId(event.target.value)}
+            <div className="flex justify-end">
+              <Button
+                disabled={guardandoPago || mediosPago.length === 0}
+                size="sm"
+                type="button"
+                variant="secondary"
+                onClick={onAgregarPagoEdicion}
               >
-                <option value="">Seleccionar medio</option>
-                {mediosPago.map((medio) => (
-                  <option key={medio.id} value={medio.id}>
-                    {medio.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <DetalleDato label="Importe" value={formatearMoneda(venta.total)} />
+                <Plus className="h-4 w-4" />
+                Agregar pago
+              </Button>
+            </div>
+            {errorPagos && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {errorPagos}
+              </div>
+            )}
+            {pagosEdicion.map((pago) => (
+              <div key={pago.id} className="grid grid-cols-[1fr_7rem_auto] items-end gap-2">
+                <label className="block text-sm font-medium">
+                  Medio
+                  <select
+                    className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+                    value={pago.medioPagoId}
+                    onChange={(event) =>
+                      onActualizarPagoEdicion(pago.id, { medioPagoId: event.target.value })
+                    }
+                  >
+                    <option value="">Seleccionar</option>
+                    {mediosPago.map((medio) => (
+                      <option key={medio.id} value={medio.id}>
+                        {medio.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium">
+                  Importe
+                  <Input
+                    className="mt-1"
+                    inputMode="decimal"
+                    type="text"
+                    value={pago.monto}
+                    onChange={(event) =>
+                      onActualizarPagoEdicion(pago.id, { monto: event.target.value })
+                    }
+                  />
+                </label>
+                <Button
+                  disabled={guardandoPago || pagosEdicion.length === 1}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => onQuitarPagoEdicion(pago.id)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <DetalleDato label="Total venta" value={formatearMoneda(venta.total)} />
+            <DetalleDato label="Total pagos" value={formatearMoneda(totalPagosEdicion)} />
+            <DetalleDato
+              label="Diferencia"
+              value={formatearMoneda(diferenciaPagosEdicion)}
+              valueClassName={claseDiferencia(diferenciaPagosEdicion)}
+            />
             <div className="flex justify-end gap-2 border-t pt-3">
               <Button
                 disabled={guardandoPago}
@@ -996,11 +1172,11 @@ function VentaDetalle({
               </Button>
             </div>
           </div>
-        ) : venta.pagos.length > 0 ? (
+        ) : pagosAgrupados.length > 0 ? (
           <div className="space-y-2">
-            {venta.pagos.map((pago) => (
+            {pagosAgrupados.map((pago) => (
               <DetalleDato
-                key={pago.id}
+                key={pago.medioPagoId}
                 label={pago.medioPagoNombre}
                 value={formatearMoneda(pago.monto)}
               />
