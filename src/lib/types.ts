@@ -46,6 +46,12 @@ export type MedioPago = {
   activo: boolean;
 };
 
+export type Proveedor = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+};
+
 export type Caja = {
   id: string;
   nombre: string;
@@ -87,6 +93,7 @@ export type Gasto = {
   id: string;
   fecha: string;
   importe: number;
+  proveedorId?: string;
   proveedor?: string;
   categoria?: string;
   comentario?: string;

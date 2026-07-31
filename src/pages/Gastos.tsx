@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Gasto, MedioPago } from "@/lib/types";
+import type { Gasto, MedioPago, Proveedor } from "@/lib/types";
 import {
   actualizarGasto,
   crearGasto,
@@ -11,6 +11,7 @@ import {
   type GastoInput,
 } from "@/services/gastosService";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
+import { obtenerProveedores } from "@/services/proveedoresService";
 
 function formatearFecha(value?: string) {
   if (!value) return "-";
@@ -53,10 +54,26 @@ function parseImporte(value: string) {
   return importe;
 }
 
+function validarTextoOpcional(value: string, campo: string, maxLength = 120) {
+  const limpio = value.trim();
+
+  if (!limpio) return "";
+
+  if (limpio.length > maxLength) {
+    throw new Error(`${campo} no puede superar ${maxLength} caracteres.`);
+  }
+
+  if (!/^[a-zA-Z0-9À-ÿñÑ\s.,'()/-]+$/.test(limpio)) {
+    throw new Error(`${campo} tiene caracteres no permitidos.`);
+  }
+
+  return limpio;
+}
+
 type GastoFormState = {
   fecha: string;
   importe: string;
-  proveedor: string;
+  proveedorId: string;
   categoria: string;
   comentario: string;
   medioPagoId: string;
@@ -65,7 +82,7 @@ type GastoFormState = {
 const crearFormVacio = (medioPagoId = ""): GastoFormState => ({
   fecha: crearFechaHoraLocalAhora(),
   importe: "",
-  proveedor: "",
+  proveedorId: "",
   categoria: "",
   comentario: "",
   medioPagoId,
@@ -75,7 +92,7 @@ function formDesdeGasto(gasto: Gasto): GastoFormState {
   return {
     fecha: fechaInputDesdeIso(gasto.fecha),
     importe: String(gasto.importe),
-    proveedor: gasto.proveedor ?? "",
+    proveedorId: gasto.proveedorId ?? "",
     categoria: gasto.categoria ?? "",
     comentario: gasto.comentario ?? "",
     medioPagoId: gasto.medioPagoId,
@@ -85,6 +102,7 @@ function formDesdeGasto(gasto: Gasto): GastoFormState {
 export function Gastos() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [gastoSeleccionado, setGastoSeleccionado] = useState<Gasto | null>(null);
   const [modoPanel, setModoPanel] = useState<"vacio" | "detalle" | "nuevo" | "editar">("vacio");
   const [form, setForm] = useState<GastoFormState>(crearFormVacio);
@@ -101,9 +119,14 @@ export function Gastos() {
     try {
       setCargando(true);
       setError(null);
-      const [gastosDb, mediosDb] = await Promise.all([obtenerGastos(), obtenerMediosPago()]);
+      const [gastosDb, mediosDb, proveedoresDb] = await Promise.all([
+        obtenerGastos(),
+        obtenerMediosPago(),
+        obtenerProveedores(),
+      ]);
       setGastos(gastosDb);
       setMediosPago(mediosDb);
+      setProveedores(proveedoresDb);
       setForm((prev) => ({
         ...prev,
         medioPagoId: prev.medioPagoId || mediosDb[0]?.id || "",
@@ -127,7 +150,10 @@ export function Gastos() {
   const abrirNuevo = () => {
     setError(null);
     setGastoSeleccionado(null);
-    setForm(crearFormVacio(mediosPago[0]?.id ?? ""));
+    setForm({
+      ...crearFormVacio(mediosPago[0]?.id ?? ""),
+      proveedorId: proveedores[0]?.id ?? "",
+    });
     setModoPanel("nuevo");
   };
 
@@ -153,12 +179,16 @@ export function Gastos() {
       throw new Error("Selecciona un medio de pago.");
     }
 
+    if (!form.proveedorId) {
+      throw new Error("Selecciona un proveedor.");
+    }
+
     return {
       fecha: form.fecha,
       importe: parseImporte(form.importe),
-      proveedor: form.proveedor,
-      categoria: form.categoria,
-      comentario: form.comentario,
+      proveedorId: form.proveedorId,
+      categoria: validarTextoOpcional(form.categoria, "La categoria"),
+      comentario: validarTextoOpcional(form.comentario, "El comentario", 300),
       medioPagoId: form.medioPagoId,
     };
   };
@@ -293,6 +323,7 @@ export function Gastos() {
         guardando={guardando}
         mediosPago={mediosPago}
         modo={modoPanel}
+        proveedores={proveedores}
         onCancelar={() => {
           setModoPanel(gastoSeleccionado ? "detalle" : "vacio");
           setError(null);
@@ -312,6 +343,7 @@ function GastoPanel({
   guardando,
   mediosPago,
   modo,
+  proveedores,
   onCancelar,
   onChange,
   onEditar,
@@ -323,6 +355,7 @@ function GastoPanel({
   guardando: boolean;
   mediosPago: MedioPago[];
   modo: "vacio" | "detalle" | "nuevo" | "editar";
+  proveedores: Proveedor[];
   onCancelar: () => void;
   onChange: (form: GastoFormState) => void;
   onEditar: (gasto: Gasto) => void;
@@ -414,11 +447,18 @@ function GastoPanel({
 
         <label className="block text-sm font-medium">
           Proveedor
-          <Input
-            className="mt-1"
-            value={form.proveedor}
-            onChange={(event) => onChange({ ...form, proveedor: event.target.value })}
-          />
+          <select
+            className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+            value={form.proveedorId}
+            onChange={(event) => onChange({ ...form, proveedorId: event.target.value })}
+          >
+            <option value="">Seleccionar proveedor</option>
+            {proveedores.map((proveedor) => (
+              <option key={proveedor.id} value={proveedor.id}>
+                {proveedor.nombre}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="block text-sm font-medium">

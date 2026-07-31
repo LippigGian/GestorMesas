@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { BriefcaseBusiness, CreditCard, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { BriefcaseBusiness, CreditCard, ShieldCheck, Store, UserRound, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfiguracionCajas } from "@/components/configuracion/ConfiguracionCajas";
 import { ConfiguracionTurnos } from "@/components/configuracion/ConfiguracionTurnos";
-import type { MedioPago } from "@/lib/types";
+import type { MedioPago, Proveedor } from "@/lib/types";
 import {
   activarMedioPago,
   crearMedioPago,
@@ -12,6 +12,14 @@ import {
   normalizarNombreMedioPago,
   obtenerTodosMediosPago,
 } from "@/services/mediosPagoService";
+import {
+  activarProveedor,
+  crearProveedor,
+  eliminarProveedor,
+  normalizarNombreProveedor,
+  obtenerTodosProveedores,
+  validarNombreProveedor,
+} from "@/services/proveedoresService";
 
 type ConfiguracionSeccion = {
   id: string;
@@ -51,6 +59,12 @@ const seccionesConfiguracion: ConfiguracionSeccion[] = [
     descripcion: "Efectivo, tarjetas, transferencias y otros medios.",
     icono: CreditCard,
   },
+  {
+    id: "proveedores",
+    nombre: "Proveedores",
+    descripcion: "Listado de proveedores disponibles para gastos.",
+    icono: Store,
+  },
 ];
 
 export function Configuracion() {
@@ -60,6 +74,11 @@ export function Configuracion() {
   const [cargandoMediosPago, setCargandoMediosPago] = useState(false);
   const [guardandoMediosPago, setGuardandoMediosPago] = useState(false);
   const [errorMediosPago, setErrorMediosPago] = useState<string | null>(null);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [nuevoProveedor, setNuevoProveedor] = useState("");
+  const [cargandoProveedores, setCargandoProveedores] = useState(false);
+  const [guardandoProveedores, setGuardandoProveedores] = useState(false);
+  const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
   const seccionActiva =
     seccionesConfiguracion.find((seccion) => seccion.id === seccionActivaId) ??
     seccionesConfiguracion[0];
@@ -93,6 +112,40 @@ export function Configuracion() {
     }
 
     cargarMediosPago();
+
+    return () => {
+      mounted = false;
+    };
+  }, [seccionActivaId]);
+
+  useEffect(() => {
+    if (seccionActivaId !== "proveedores") return;
+
+    let mounted = true;
+
+    async function cargarProveedores() {
+      try {
+        setCargandoProveedores(true);
+        setErrorProveedores(null);
+        const data = await obtenerTodosProveedores();
+
+        if (mounted) {
+          setProveedores(data);
+        }
+      } catch (err) {
+        if (mounted) {
+          setErrorProveedores(
+            err instanceof Error ? err.message : "No se pudieron cargar los proveedores"
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCargandoProveedores(false);
+        }
+      }
+    }
+
+    cargarProveedores();
 
     return () => {
       mounted = false;
@@ -166,6 +219,75 @@ export function Configuracion() {
       );
     } finally {
       setGuardandoMediosPago(false);
+    }
+  };
+
+  const agregarProveedor = async () => {
+    let nombreValidado = "";
+
+    try {
+      nombreValidado = validarNombreProveedor(nuevoProveedor);
+    } catch (err) {
+      setErrorProveedores(err instanceof Error ? err.message : "El proveedor no es valido.");
+      return;
+    }
+
+    const nombreNormalizado = normalizarNombreProveedor(nombreValidado);
+    const yaExiste = proveedores.some(
+      (proveedor) => normalizarNombreProveedor(proveedor.nombre) === nombreNormalizado
+    );
+
+    if (yaExiste) {
+      setErrorProveedores("Ya existe un proveedor con ese nombre.");
+      return;
+    }
+
+    try {
+      setGuardandoProveedores(true);
+      setErrorProveedores(null);
+      const creado = await crearProveedor(nombreValidado);
+      setProveedores((prev) =>
+        [...prev, creado].sort((a, b) => a.nombre.localeCompare(b.nombre))
+      );
+      setNuevoProveedor("");
+    } catch (err) {
+      setErrorProveedores(err instanceof Error ? err.message : "No se pudo agregar el proveedor");
+    } finally {
+      setGuardandoProveedores(false);
+    }
+  };
+
+  const quitarProveedor = async (proveedor: Proveedor) => {
+    if (!window.confirm(`Quitar el proveedor "${proveedor.nombre}"?`)) {
+      return;
+    }
+
+    try {
+      setGuardandoProveedores(true);
+      setErrorProveedores(null);
+      await eliminarProveedor(proveedor.id);
+      setProveedores((prev) =>
+        prev.map((item) => (item.id === proveedor.id ? { ...item, activo: false } : item))
+      );
+    } catch (err) {
+      setErrorProveedores(err instanceof Error ? err.message : "No se pudo quitar el proveedor");
+    } finally {
+      setGuardandoProveedores(false);
+    }
+  };
+
+  const reactivarProveedor = async (proveedor: Proveedor) => {
+    try {
+      setGuardandoProveedores(true);
+      setErrorProveedores(null);
+      await activarProveedor(proveedor.id);
+      setProveedores((prev) =>
+        prev.map((item) => (item.id === proveedor.id ? { ...item, activo: true } : item))
+      );
+    } catch (err) {
+      setErrorProveedores(err instanceof Error ? err.message : "No se pudo activar el proveedor");
+    } finally {
+      setGuardandoProveedores(false);
     }
   };
 
@@ -288,6 +410,91 @@ export function Configuracion() {
                       <tr>
                         <td className="p-4 text-center text-muted-foreground" colSpan={3}>
                           No hay medios de pago cargados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : seccionActivaId === "proveedores" ? (
+            <div className="space-y-4">
+              {errorProveedores && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errorProveedores}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nuevo proveedor"
+                  value={nuevoProveedor}
+                  onChange={(event) => setNuevoProveedor(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      agregarProveedor();
+                    }
+                  }}
+                />
+                <Button disabled={guardandoProveedores} type="button" onClick={agregarProveedor}>
+                  Agregar
+                </Button>
+              </div>
+
+              <div className="overflow-hidden rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary text-secondary-foreground">
+                    <tr>
+                      <th className="p-3 text-left">Nombre</th>
+                      <th className="p-3 text-left">Estado</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cargandoProveedores ? (
+                      <tr>
+                        <td className="p-4 text-center text-muted-foreground" colSpan={3}>
+                          Cargando proveedores...
+                        </td>
+                      </tr>
+                    ) : proveedores.length > 0 ? (
+                      proveedores.map((proveedor) => (
+                        <tr key={proveedor.id} className="border-b">
+                          <td className="p-3 font-medium">{proveedor.nombre}</td>
+                          <td className="p-3">
+                            <span className="rounded bg-muted px-2 py-1 text-xs">
+                              {proveedor.activo ? "Activo" : "Inactivo"}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            {proveedor.activo ? (
+                              <Button
+                                disabled={guardandoProveedores}
+                                size="sm"
+                                type="button"
+                                variant="destructive"
+                                onClick={() => quitarProveedor(proveedor)}
+                              >
+                                Quitar
+                              </Button>
+                            ) : (
+                              <Button
+                                disabled={guardandoProveedores}
+                                size="sm"
+                                type="button"
+                                variant="secondary"
+                                onClick={() => reactivarProveedor(proveedor)}
+                              >
+                                Activar
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="p-4 text-center text-muted-foreground" colSpan={3}>
+                          No hay proveedores cargados.
                         </td>
                       </tr>
                     )}

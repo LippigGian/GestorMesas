@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 export type GastoInput = {
   fecha: string;
   importe: number;
-  proveedor?: string;
+  proveedorId: string;
   categoria?: string;
   comentario?: string;
   medioPagoId: string;
@@ -14,6 +14,7 @@ type GastoRow = {
   id: string;
   arqueo_caja_id: string;
   medio_pago_id: string;
+  proveedor_id: string | null;
   fecha: string;
   importe: number;
   proveedor: string | null;
@@ -21,6 +22,7 @@ type GastoRow = {
   comentario: string | null;
   created_at: string;
   medios_pago?: { nombre: string } | { nombre: string }[] | null;
+  proveedores?: { nombre: string } | { nombre: string }[] | null;
   arqueos_caja?: { estado: "abierto" | "cerrado" | "cancelado" } | { estado: "abierto" | "cerrado" | "cancelado" }[] | null;
 };
 
@@ -30,6 +32,7 @@ function obtenerRelacion<T>(relacion: T | T[] | null | undefined): T | undefined
 
 function mapGasto(row: GastoRow): Gasto {
   const medioPago = obtenerRelacion(row.medios_pago);
+  const proveedor = obtenerRelacion(row.proveedores);
   const arqueo = obtenerRelacion(row.arqueos_caja);
 
   return {
@@ -38,9 +41,10 @@ function mapGasto(row: GastoRow): Gasto {
     arqueoCajaEstado: arqueo?.estado,
     medioPagoId: row.medio_pago_id,
     medioPagoNombre: medioPago?.nombre,
+    proveedorId: row.proveedor_id ?? undefined,
     fecha: row.fecha,
     importe: Number(row.importe),
-    proveedor: row.proveedor ?? undefined,
+    proveedor: proveedor?.nombre ?? row.proveedor ?? undefined,
     categoria: row.categoria ?? undefined,
     comentario: row.comentario ?? undefined,
     createdAt: row.created_at,
@@ -48,7 +52,25 @@ function mapGasto(row: GastoRow): Gasto {
 }
 
 const selectGasto =
-  "id, arqueo_caja_id, medio_pago_id, fecha, importe, proveedor, categoria, comentario, created_at, medios_pago(nombre), arqueos_caja(estado)";
+  "id, arqueo_caja_id, medio_pago_id, proveedor_id, fecha, importe, proveedor, categoria, comentario, created_at, medios_pago(nombre), proveedores(nombre), arqueos_caja(estado)";
+
+function validarInputGasto(input: GastoInput) {
+  if (!input.medioPagoId) {
+    throw new Error("Selecciona un medio de pago.");
+  }
+
+  if (!input.proveedorId) {
+    throw new Error("Selecciona un proveedor.");
+  }
+
+  if (!Number.isFinite(input.importe) || input.importe <= 0) {
+    throw new Error("El importe debe ser mayor a cero.");
+  }
+
+  if (!input.fecha || Number.isNaN(new Date(input.fecha).getTime())) {
+    throw new Error("Selecciona una fecha valida.");
+  }
+}
 
 async function obtenerArqueoAbiertoId() {
   const { data, error } = await supabase
@@ -101,6 +123,7 @@ export async function obtenerGastos(): Promise<Gasto[]> {
 }
 
 export async function crearGasto(input: GastoInput): Promise<Gasto> {
+  validarInputGasto(input);
   const arqueoCajaId = await obtenerArqueoAbiertoId();
 
   const { data, error } = await supabase
@@ -108,9 +131,9 @@ export async function crearGasto(input: GastoInput): Promise<Gasto> {
     .insert({
       arqueo_caja_id: arqueoCajaId,
       medio_pago_id: input.medioPagoId,
+      proveedor_id: input.proveedorId,
       fecha: new Date(input.fecha).toISOString(),
       importe: input.importe,
-      proveedor: input.proveedor?.trim() || null,
       categoria: input.categoria?.trim() || null,
       comentario: input.comentario?.trim() || null,
     })
@@ -125,6 +148,7 @@ export async function crearGasto(input: GastoInput): Promise<Gasto> {
 }
 
 export async function actualizarGasto(gastoId: string, input: GastoInput): Promise<Gasto> {
+  validarInputGasto(input);
   const { data: gastoActual, error: gastoError } = await supabase
     .from("gastos")
     .select("arqueo_caja_id")
@@ -141,9 +165,9 @@ export async function actualizarGasto(gastoId: string, input: GastoInput): Promi
     .from("gastos")
     .update({
       medio_pago_id: input.medioPagoId,
+      proveedor_id: input.proveedorId,
       fecha: new Date(input.fecha).toISOString(),
       importe: input.importe,
-      proveedor: input.proveedor?.trim() || null,
       categoria: input.categoria?.trim() || null,
       comentario: input.comentario?.trim() || null,
       updated_at: new Date().toISOString(),
