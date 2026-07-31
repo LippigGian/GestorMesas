@@ -86,22 +86,34 @@ async function obtenerMontosSistemaPorMedio(arqueoId: string) {
   const pedidoIds = (pedidos ?? []).map((pedido) => pedido.id);
   const montos = new Map<string, number>();
 
-  if (pedidoIds.length === 0) {
-    return montos;
+  if (pedidoIds.length > 0) {
+    const { data: pagos, error: pagosError } = await supabase
+      .from("pedido_pagos")
+      .select("medio_pago_id, monto")
+      .in("pedido_id", pedidoIds);
+
+    if (pagosError) {
+      throw new Error(pagosError.message);
+    }
+
+    for (const pago of pagos ?? []) {
+      const medioPagoId = String(pago.medio_pago_id);
+      montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) + Number(pago.monto));
+    }
   }
 
-  const { data: pagos, error: pagosError } = await supabase
-    .from("pedido_pagos")
-    .select("medio_pago_id, monto")
-    .in("pedido_id", pedidoIds);
+  const { data: gastos, error: gastosError } = await supabase
+    .from("gastos")
+    .select("medio_pago_id, importe")
+    .eq("arqueo_caja_id", arqueoId);
 
-  if (pagosError) {
-    throw new Error(pagosError.message);
+  if (gastosError) {
+    throw new Error(gastosError.message);
   }
 
-  for (const pago of pagos ?? []) {
-    const medioPagoId = String(pago.medio_pago_id);
-    montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) + Number(pago.monto));
+  for (const gasto of gastos ?? []) {
+    const medioPagoId = String(gasto.medio_pago_id);
+    montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) - Number(gasto.importe));
   }
 
   return montos;
@@ -152,23 +164,13 @@ export async function cerrarArqueoCaja(input: {
   arqueoId: string;
   declaraciones: Array<{ medioPagoId: string; montoDeclarado: number }>;
 }): Promise<ArqueoCaja> {
-  const { data: arqueoActual, error: obtenerError } = await supabase
-    .from("arqueos_caja")
-    .select("total_ventas")
-    .eq("id", input.arqueoId)
-    .single();
-
-  if (obtenerError) {
-    throw new Error(obtenerError.message);
-  }
-
   const montosSistema = await obtenerMontosSistemaPorMedio(input.arqueoId);
-  const totalVentas = Number(arqueoActual.total_ventas);
+  const totalSistema = Array.from(montosSistema.values()).reduce((acc, monto) => acc + monto, 0);
   const montoFinalDeclarado = input.declaraciones.reduce(
     (acc, declaracion) => acc + declaracion.montoDeclarado,
     0
   );
-  const diferencia = montoFinalDeclarado - totalVentas;
+  const diferencia = montoFinalDeclarado - totalSistema;
 
   const registros = input.declaraciones.map((declaracion) => {
     const montoSistema = montosSistema.get(declaracion.medioPagoId) ?? 0;

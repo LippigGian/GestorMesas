@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Calculator,
   Clock,
   LogOut,
   Pencil,
@@ -47,6 +48,17 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           >
             <Link to="/ventas">
               <BarChart3 className="h-5 w-5" />
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant={location.pathname === "/gastos" ? "secondary" : "ghost"}
+            size="icon"
+            className={navButtonClass}
+            data-active={location.pathname === "/gastos"}
+          >
+            <Link to="/gastos">
+              <Calculator className="h-5 w-5" />
             </Link>
           </Button>
           <Button variant="ghost" size="icon" className={navButtonClass}>

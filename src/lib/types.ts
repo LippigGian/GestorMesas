@@ -83,6 +83,20 @@ export type Turno = {
   activo: boolean;
 };
 
+export type Gasto = {
+  id: string;
+  fecha: string;
+  importe: number;
+  proveedor?: string;
+  categoria?: string;
+  comentario?: string;
+  medioPagoId: string;
+  medioPagoNombre?: string;
+  arqueoCajaId: string;
+  arqueoCajaEstado?: 'abierto' | 'cerrado' | 'cancelado';
+  createdAt?: string;
+};
+
 export type Categoria = {
   id: string;
   nombre: string;
