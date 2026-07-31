@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,28 +11,76 @@ import {
 import { Input } from "@/components/ui/input";
 import type { MedioPago, PedidoItem } from "@/lib/types";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
-import type { PagoPedidoInput } from "@/services/pedidosService";
+import {
+  obtenerTotalPagadoPedido,
+  type PagoPedidoInput,
+} from "@/services/pedidosService";
 
 type Props = {
   open: boolean;
+  pedidoId: string;
   titulo: string;
   total: number;
   items: PedidoItem[];
   onClose: () => void;
+  onCobroParcial?: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onConfirmar: (pagos: PagoPedidoInput[]) => Promise<void> | void;
 };
 
-export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConfirmar }: Props) {
+type PagoForm = {
+  id: string;
+  medioPagoId: string;
+  monto: string;
+};
+
+function crearPagoId() {
+  return crypto.randomUUID();
+}
+
+function parseMonto(value: string) {
+  const limpio = value.trim().replace(",", ".");
+
+  if (!/^\d+(\.\d{1,2})?$/.test(limpio)) {
+    throw new Error("Todos los montos deben ser numeros validos.");
+  }
+
+  const monto = Number(limpio);
+
+  if (!Number.isFinite(monto) || monto <= 0) {
+    throw new Error("Todos los montos deben ser mayores a cero.");
+  }
+
+  return monto;
+}
+
+export function CerrarPedidoDialog({
+  open,
+  pedidoId,
+  titulo,
+  total,
+  items,
+  onClose,
+  onCobroParcial,
+  onConfirmar,
+}: Props) {
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
-  const [medioPagoId, setMedioPagoId] = useState("");
-  const [monto, setMonto] = useState("");
+  const [pagos, setPagos] = useState<PagoForm[]>([]);
+  const [totalPagadoPrevio, setTotalPagadoPrevio] = useState(0);
+  const [cobroParcial, setCobroParcial] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const montoNumerico = Number(monto);
-  const montoValido = Number.isFinite(montoNumerico) ? montoNumerico : 0;
-  const vuelto = Math.max(0, montoValido - total);
-  const faltante = Math.max(0, total - montoValido);
+  const totalPagado = useMemo(
+    () =>
+      pagos.reduce((acc, pago) => {
+        const monto = Number(pago.monto.replace(",", "."));
+        return acc + (Number.isFinite(monto) ? monto : 0);
+      }, 0),
+    [pagos]
+  );
+  const pendiente = Math.max(0, total - totalPagadoPrevio);
+  const faltante = Math.max(0, pendiente - totalPagado);
+  const excedente = Math.max(0, totalPagado - pendiente);
 
   useEffect(() => {
     if (!open) return;
@@ -42,13 +91,22 @@ export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConf
       try {
         setCargando(true);
         setError(null);
-        setMonto(String(total));
+        setCobroParcial(false);
         const medios = await obtenerMediosPago();
+        const pagado = await obtenerTotalPagadoPedido(pedidoId);
 
         if (!mounted) return;
 
+        const pendienteActual = Math.max(0, total - pagado);
         setMediosPago(medios);
-        setMedioPagoId(medios[0]?.id ?? "");
+        setTotalPagadoPrevio(pagado);
+        setPagos([
+          {
+            id: crearPagoId(),
+            medioPagoId: medios[0]?.id ?? "",
+            monto: String(pendienteActual),
+          },
+        ]);
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : "No se pudieron cargar los medios de pago");
@@ -65,23 +123,81 @@ export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConf
     return () => {
       mounted = false;
     };
-  }, [open, total]);
+  }, [open, pedidoId, total]);
+
+  const actualizarPago = (pagoId: string, patch: Partial<Omit<PagoForm, "id">>) => {
+    setPagos((prev) =>
+      prev.map((pago) => (pago.id === pagoId ? { ...pago, ...patch } : pago))
+    );
+  };
+
+  const agregarPago = () => {
+    const restante = Math.max(0, pendiente - totalPagado);
+    setPagos((prev) => [
+      ...prev,
+      {
+        id: crearPagoId(),
+        medioPagoId: mediosPago[0]?.id ?? "",
+        monto: restante > 0 ? String(restante) : "",
+      },
+    ]);
+  };
+
+  const quitarPago = (pagoId: string) => {
+    setPagos((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((pago) => pago.id !== pagoId);
+    });
+  };
 
   const confirmar = async () => {
-    if (!medioPagoId) {
-      setError("Selecciona un medio de pago.");
+    if (pagos.length === 0) {
+      setError("Agrega al menos un pago.");
       return;
     }
 
-    if (montoValido < total) {
-      setError("El monto pagado no puede ser menor al total.");
+    if (pagos.some((pago) => !pago.medioPagoId)) {
+      setError("Selecciona un medio de pago en cada cobro.");
+      return;
+    }
+
+    let pagosNormalizados: PagoPedidoInput[] = [];
+
+    try {
+      pagosNormalizados = pagos.map((pago) => ({
+        medioPagoId: pago.medioPagoId,
+        monto: parseMonto(pago.monto),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Revisa los montos de pago.");
+      return;
+    }
+
+    const suma = pagosNormalizados.reduce((acc, pago) => acc + pago.monto, 0);
+
+    if (cobroParcial) {
+      if (!onCobroParcial) {
+        setError("El cobro parcial no esta disponible para este pedido.");
+        return;
+      }
+
+      if (suma >= pendiente - 0.01) {
+        setError("Para cobrar el saldo completo usa Cerrar venta.");
+        return;
+      }
+    } else if (Math.abs(suma - pendiente) > 0.01) {
+      setError("La suma de los cobros debe coincidir con el saldo pendiente.");
       return;
     }
 
     try {
       setConfirmando(true);
       setError(null);
-      await onConfirmar([{ medioPagoId, monto: total }]);
+      if (cobroParcial && onCobroParcial) {
+        await onCobroParcial(pagosNormalizados);
+      } else {
+        await onConfirmar(pagosNormalizados);
+      }
       onClose();
     } finally {
       setConfirmando(false);
@@ -121,48 +237,88 @@ export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConf
               <span>Total</span>
               <span className="text-lg font-bold">${total.toLocaleString()}</span>
             </div>
+            {totalPagadoPrevio > 0 && (
+              <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-2 text-sm">
+                <span>Pagado anteriormente</span>
+                <span className="font-semibold">${totalPagadoPrevio.toLocaleString()}</span>
+              </div>
+            )}
           </section>
 
           <section className="overflow-hidden rounded-md border">
-            <div className="bg-muted px-3 py-2 text-sm font-semibold">Pago</div>
+            <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-semibold">
+              <span>Pago</span>
+              <Button
+                disabled={cargando || confirmando || mediosPago.length === 0}
+                size="icon"
+                type="button"
+                variant="secondary"
+                onClick={agregarPago}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
             <div className="space-y-3 p-3">
-              <label className="text-sm font-medium">
-                Medio de pago
-                <select
-                  className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
-                  disabled={cargando || confirmando}
-                  value={medioPagoId}
-                  onChange={(event) => setMedioPagoId(event.target.value)}
-                >
-                  {mediosPago.map((medio) => (
-                    <option key={medio.id} value={medio.id}>
-                      {medio.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {pagos.map((pago) => (
+                <div key={pago.id} className="grid grid-cols-[1fr_8rem_auto] items-end gap-2">
+                  <label className="text-sm font-medium">
+                    Medio
+                    <select
+                      className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
+                      disabled={cargando || confirmando}
+                      value={pago.medioPagoId}
+                      onChange={(event) =>
+                        actualizarPago(pago.id, { medioPagoId: event.target.value })
+                      }
+                    >
+                      {mediosPago.map((medio) => (
+                        <option key={medio.id} value={medio.id}>
+                          {medio.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="text-sm font-medium">
-                Monto recibido
-                <Input
-                  className="mt-1"
-                  disabled={confirmando}
-                  min={0}
-                  step={0.01}
-                  type="number"
-                  value={monto}
-                  onChange={(event) => setMonto(event.target.value)}
-                />
-              </label>
+                  <label className="text-sm font-medium">
+                    Importe
+                    <Input
+                      className="mt-1"
+                      disabled={confirmando}
+                      inputMode="decimal"
+                      type="text"
+                      value={pago.monto}
+                      onChange={(event) => actualizarPago(pago.id, { monto: event.target.value })}
+                    />
+                  </label>
+
+                  <Button
+                    disabled={confirmando || pagos.length === 1}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => quitarPago(pago.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
 
               <div className="rounded-md bg-muted/50 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span>Saldo pendiente</span>
+                  <span className="font-semibold">${pendiente.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total cobrado</span>
+                  <span>${totalPagado.toLocaleString()}</span>
+                </div>
                 <div className="flex justify-between">
                   <span>Faltante</span>
                   <span>${faltante.toLocaleString()}</span>
                 </div>
                 <div className="mt-2 flex justify-between">
-                  <span>Vuelto</span>
-                  <span className="font-semibold">${vuelto.toLocaleString()}</span>
+                  <span>Excedente</span>
+                  <span className="font-semibold">${excedente.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -170,6 +326,18 @@ export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConf
         </div>
 
         <DialogFooter>
+          {onCobroParcial && (
+            <label className="mr-auto flex items-center gap-2 text-sm">
+              <input
+                checked={cobroParcial}
+                className="h-4 w-4"
+                disabled={confirmando}
+                type="checkbox"
+                onChange={(event) => setCobroParcial(event.target.checked)}
+              />
+              Cobro parcial
+            </label>
+          )}
           <Button disabled={confirmando} type="button" variant="outline" onClick={onClose}>
             Cancelar
           </Button>
@@ -178,7 +346,7 @@ export function CerrarPedidoDialog({ open, titulo, total, items, onClose, onConf
             type="button"
             onClick={confirmar}
           >
-            Cerrar venta
+            {cobroParcial ? "Registrar cobro" : "Cerrar venta"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -73,33 +73,20 @@ export async function obtenerArqueosCaja(): Promise<ArqueoCaja[]> {
 }
 
 async function obtenerMontosSistemaPorMedio(arqueoId: string) {
-  const { data: pedidos, error: pedidosError } = await supabase
-    .from("pedidos")
-    .select("id")
-    .eq("arqueo_caja_id", arqueoId)
-    .eq("estado", "cerrado");
-
-  if (pedidosError) {
-    throw new Error(pedidosError.message);
-  }
-
-  const pedidoIds = (pedidos ?? []).map((pedido) => pedido.id);
   const montos = new Map<string, number>();
 
-  if (pedidoIds.length > 0) {
-    const { data: pagos, error: pagosError } = await supabase
-      .from("pedido_pagos")
-      .select("medio_pago_id, monto")
-      .in("pedido_id", pedidoIds);
+  const { data: pagos, error: pagosError } = await supabase
+    .from("pedido_pagos")
+    .select("medio_pago_id, monto")
+    .eq("arqueo_caja_id", arqueoId);
 
-    if (pagosError) {
-      throw new Error(pagosError.message);
-    }
+  if (pagosError) {
+    throw new Error(pagosError.message);
+  }
 
-    for (const pago of pagos ?? []) {
-      const medioPagoId = String(pago.medio_pago_id);
-      montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) + Number(pago.monto));
-    }
+  for (const pago of pagos ?? []) {
+    const medioPagoId = String(pago.medio_pago_id);
+    montos.set(medioPagoId, (montos.get(medioPagoId) ?? 0) + Number(pago.monto));
   }
 
   const { data: gastos, error: gastosError } = await supabase

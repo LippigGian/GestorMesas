@@ -7,6 +7,7 @@ export type TipoVentaFiltro = "todos" | "mesa" | "mostrador";
 export type VentaPago = {
   id: string;
   medioPagoId: string;
+  arqueoCajaId?: string;
   medioPagoNombre: string;
   monto: number;
 };
@@ -61,6 +62,7 @@ type VentaRow = {
   pedido_pagos?: Array<{
     id: string;
     medio_pago_id: string;
+    arqueo_caja_id: string | null;
     monto: number;
     medios_pago?: { nombre: string } | { nombre: string }[] | null;
   }> | null;
@@ -103,6 +105,7 @@ function mapVenta(row: VentaRow): VentaResumen {
       return {
         id: pago.id,
         medioPagoId: pago.medio_pago_id,
+        arqueoCajaId: pago.arqueo_caja_id ?? undefined,
         medioPagoNombre: medio?.nombre ?? "Sin medio",
         monto: Number(pago.monto),
       };
@@ -143,7 +146,7 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
         "arqueo_caja_id",
         "mesas(numero)",
         "turnos(nombre)",
-        "pedido_pagos(id, medio_pago_id, monto, medios_pago(nombre))",
+        "pedido_pagos(id, medio_pago_id, arqueo_caja_id, monto, medios_pago(nombre))",
         "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal)",
       ].join(", ")
     )
@@ -210,7 +213,7 @@ export async function obtenerVentaPorId(ventaId: string): Promise<VentaResumen> 
         "arqueo_caja_id",
         "mesas(numero)",
         "turnos(nombre)",
-        "pedido_pagos(id, medio_pago_id, monto, medios_pago(nombre))",
+        "pedido_pagos(id, medio_pago_id, arqueo_caja_id, monto, medios_pago(nombre))",
         "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal)",
       ].join(", ")
     )
@@ -230,7 +233,7 @@ export async function actualizarPagosVenta(
 ): Promise<VentaResumen> {
   const { data: venta, error: ventaError } = await supabase
     .from("pedidos")
-    .select("id, estado, total, arqueo_caja_id")
+    .select("id, estado, total")
     .eq("id", ventaId)
     .single();
 
@@ -242,14 +245,29 @@ export async function actualizarPagosVenta(
     throw new Error("Solo se pueden editar pagos de ventas cerradas.");
   }
 
-  if (!venta.arqueo_caja_id) {
-    throw new Error("La venta no tiene arqueo asociado.");
+  const { data: pagosActuales, error: pagosActualesError } = await supabase
+    .from("pedido_pagos")
+    .select("id, arqueo_caja_id")
+    .eq("pedido_id", ventaId);
+
+  if (pagosActualesError) {
+    throw new Error(pagosActualesError.message);
   }
+
+  const arqueoCajaIds = Array.from(
+    new Set((pagosActuales ?? []).map((pago) => pago.arqueo_caja_id).filter(Boolean))
+  );
+
+  if (arqueoCajaIds.length !== 1) {
+    throw new Error("Esta venta tiene pagos en mas de un arqueo. Editala desde ajustes avanzados.");
+  }
+
+  const arqueoCajaId = String(arqueoCajaIds[0]);
 
   const { data: arqueo, error: arqueoError } = await supabase
     .from("arqueos_caja")
     .select("estado")
-    .eq("id", venta.arqueo_caja_id)
+    .eq("id", arqueoCajaId)
     .single();
 
   if (arqueoError) {
@@ -288,6 +306,7 @@ export async function actualizarPagosVenta(
     pagos.map((pago) => ({
       pedido_id: ventaId,
       medio_pago_id: pago.medioPagoId,
+      arqueo_caja_id: arqueoCajaId,
       monto: pago.monto,
     }))
   );

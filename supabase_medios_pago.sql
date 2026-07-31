@@ -45,15 +45,29 @@ create table if not exists public.pedido_pagos (
   id uuid primary key default gen_random_uuid(),
   pedido_id uuid not null references public.pedidos(id) on delete cascade,
   medio_pago_id uuid not null references public.medios_pago(id),
+  arqueo_caja_id uuid references public.arqueos_caja(id),
   monto numeric(12, 2) not null check (monto >= 0),
   created_at timestamptz not null default now()
 );
+
+alter table public.pedido_pagos
+add column if not exists arqueo_caja_id uuid references public.arqueos_caja(id);
+
+update public.pedido_pagos pp
+set arqueo_caja_id = p.arqueo_caja_id
+from public.pedidos p
+where pp.pedido_id = p.id
+  and pp.arqueo_caja_id is null
+  and p.arqueo_caja_id is not null;
 
 create index if not exists pedido_pagos_pedido_id_idx
 on public.pedido_pagos (pedido_id);
 
 create index if not exists pedido_pagos_medio_pago_id_idx
 on public.pedido_pagos (medio_pago_id);
+
+create index if not exists pedido_pagos_arqueo_caja_id_idx
+on public.pedido_pagos (arqueo_caja_id);
 
 alter table public.pedido_pagos enable row level security;
 

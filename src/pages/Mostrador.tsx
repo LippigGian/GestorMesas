@@ -14,6 +14,7 @@ import {
   eliminarItemPedido,
   obtenerItemsPedido,
   obtenerPedidosMostradorAbiertos,
+  registrarPagoParcialPedido,
   type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
@@ -259,6 +260,24 @@ export function Mostrador() {
     }
   };
 
+  const registrarCobroParcial = async (pagos: PagoPedidoInput[]) => {
+    if (!pedidoSeleccionado) {
+      return;
+    }
+
+    try {
+      setGuardando(true);
+      setErrorMostrador(null);
+      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos);
+      setMostrandoCierre(false);
+    } catch (err) {
+      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
+      throw err;
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return (
     <main className="p-4">
       <div className="mb-4 flex items-center justify-between">
@@ -497,9 +516,11 @@ export function Mostrador() {
               <CerrarPedidoDialog
                 items={pedidoItems}
                 open={mostrandoCierre}
+                pedidoId={pedidoSeleccionado.id}
                 titulo="Cerrar pedido de mostrador"
                 total={totalConfirmado}
                 onClose={() => setMostrandoCierre(false)}
+                onCobroParcial={registrarCobroParcial}
                 onConfirmar={finalizarPedido}
               />
             </>

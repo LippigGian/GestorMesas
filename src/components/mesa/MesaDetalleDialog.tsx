@@ -15,6 +15,7 @@ type Props = {
   onActualizarCantidadItem: (item: PedidoItem, cantidad: number) => Promise<void> | void;
   onEliminarItem: (itemId: string) => Promise<void> | void;
   onOcuparMesa: (personas: number) => Promise<void> | void;
+  onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onAplicarDescuento: () => void;
 };
@@ -35,6 +36,7 @@ export function MesaDetalleDialog({
   onActualizarCantidadItem,
   onEliminarItem,
   onOcuparMesa,
+  onCobroParcial,
   onCerrarMesa,
   onAplicarDescuento,
 }: Props) {
@@ -325,9 +327,11 @@ export function MesaDetalleDialog({
           <CerrarPedidoDialog
             items={pedidoItems}
             open={mostrandoCierre}
+            pedidoId={pedido?.id ?? ""}
             titulo={`Cerrar mesa ${mesa.numero}`}
             total={totalConfirmado}
             onClose={() => setMostrandoCierre(false)}
+            onCobroParcial={onCobroParcial}
             onConfirmar={onCerrarMesa}
           />
         </>

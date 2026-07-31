@@ -122,17 +122,17 @@ async function obtenerTurnoParaFecha(fecha: Date): Promise<string | null> {
 }
 
 async function recalcularTotalArqueo(arqueoCajaId: string) {
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("total")
+  const { data: pagos, error } = await supabase
+    .from("pedido_pagos")
+    .select("monto")
     .eq("arqueo_caja_id", arqueoCajaId)
-    .eq("estado", "cerrado");
+    .not("arqueo_caja_id", "is", null);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const totalVentas = (data ?? []).reduce((acc, pedido) => acc + Number(pedido.total), 0);
+  const totalVentas = (pagos ?? []).reduce((acc, pago) => acc + Number(pago.monto), 0);
   const { error: updateError } = await supabase
     .from("arqueos_caja")
     .update({ total_ventas: totalVentas, updated_at: new Date().toISOString() })
@@ -288,6 +288,122 @@ export type PagoPedidoInput = {
   monto: number;
 };
 
+export type PagoPedido = PagoPedidoInput & {
+  id: string;
+};
+
+async function obtenerPagosPedidoRaw(pedidoId: string): Promise<PagoPedido[]> {
+  const { data, error } = await supabase
+    .from("pedido_pagos")
+    .select("id, medio_pago_id, monto")
+    .eq("pedido_id", pedidoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((pago) => ({
+    id: String(pago.id),
+    medioPagoId: String(pago.medio_pago_id),
+    monto: Number(pago.monto),
+  }));
+}
+
+export async function obtenerTotalPagadoPedido(pedidoId: string): Promise<number> {
+  const pagos = await obtenerPagosPedidoRaw(pedidoId);
+  return pagos.reduce((acc, pago) => acc + pago.monto, 0);
+}
+
+function validarPagosPedido(pagos: PagoPedidoInput[]) {
+  if (pagos.length === 0) {
+    throw new Error("Agrega al menos un pago.");
+  }
+
+  if (pagos.some((pago) => !pago.medioPagoId || !Number.isFinite(pago.monto) || pago.monto <= 0)) {
+    throw new Error("Revisa los medios de pago y montos.");
+  }
+}
+
+async function obtenerArqueoPedidoParaPago(pedidoId: string) {
+  const { data: pedido, error: pedidoError } = await supabase
+    .from("pedidos")
+    .select("arqueo_caja_id")
+    .eq("id", pedidoId)
+    .single();
+
+  if (pedidoError) {
+    throw new Error(pedidoError.message);
+  }
+
+  const arqueoCajaId = await obtenerArqueoAbiertoParaVenta();
+
+  const { data: arqueo, error: arqueoError } = await supabase
+    .from("arqueos_caja")
+    .select("estado")
+    .eq("id", arqueoCajaId)
+    .single();
+
+  if (arqueoError) {
+    throw new Error(arqueoError.message);
+  }
+
+  if (arqueo.estado !== "abierto") {
+    throw new Error("No se pueden registrar pagos en un arqueo cerrado.");
+  }
+
+  if (!pedido.arqueo_caja_id) {
+    const { error: updateError } = await supabase
+      .from("pedidos")
+      .update({ arqueo_caja_id: arqueoCajaId, updated_at: new Date().toISOString() })
+      .eq("id", pedidoId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
+  return arqueoCajaId;
+}
+
+async function insertarPagosPedido(
+  pedidoId: string,
+  pagos: PagoPedidoInput[],
+  arqueoCajaId: string
+) {
+  const { error: pagosError } = await supabase.from("pedido_pagos").insert(
+    pagos.map((pago) => ({
+      pedido_id: pedidoId,
+      medio_pago_id: pago.medioPagoId,
+      arqueo_caja_id: arqueoCajaId,
+      monto: pago.monto,
+    }))
+  );
+
+  if (pagosError) {
+    throw new Error(pagosError.message);
+  }
+}
+
+export async function registrarPagoParcialPedido(
+  pedidoId: string,
+  pagos: PagoPedidoInput[]
+): Promise<number> {
+  validarPagosPedido(pagos);
+  const total = await recalcularTotalPedido(pedidoId);
+  const pagadoActual = await obtenerTotalPagadoPedido(pedidoId);
+  const totalNuevo = pagos.reduce((acc, pago) => acc + pago.monto, 0);
+
+  if (pagadoActual + totalNuevo >= total - 0.01) {
+    throw new Error("Para cobrar el total usa Cerrar venta.");
+  }
+
+  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId);
+  await insertarPagosPedido(pedidoId, pagos, arqueoCajaId);
+  await recalcularTotalArqueo(arqueoCajaId);
+
+  return pagadoActual + totalNuevo;
+}
+
 export async function confirmarProductosPedido(
   pedidoId: string,
   productos: ProductoPendientePedido[]
@@ -382,28 +498,20 @@ export async function eliminarItemPedido(
 
 export async function cerrarPedido(pedidoId: string, pagos: PagoPedidoInput[] = []): Promise<void> {
   const total = await recalcularTotalPedido(pedidoId);
-  const arqueoCajaId = await obtenerArqueoAbiertoParaVenta();
+  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId);
   const closedAt = new Date();
   const turnoId = await obtenerTurnoParaFecha(closedAt);
-  const totalPagos = pagos.reduce((acc, pago) => acc + pago.monto, 0);
+  const pagadoActual = await obtenerTotalPagadoPedido(pedidoId);
+  const totalPagosNuevos = pagos.reduce((acc, pago) => acc + pago.monto, 0);
+  const totalPagos = pagadoActual + totalPagosNuevos;
 
-  if (pagos.length === 0 || Math.abs(totalPagos - total) > 0.01) {
+  validarPagosPedido(pagos);
+
+  if (Math.abs(totalPagos - total) > 0.01) {
     throw new Error("Los pagos deben coincidir con el total de la venta.");
   }
 
-  if (pagos.length > 0) {
-    const { error: pagosError } = await supabase.from("pedido_pagos").insert(
-      pagos.map((pago) => ({
-        pedido_id: pedidoId,
-        medio_pago_id: pago.medioPagoId,
-        monto: pago.monto,
-      }))
-    );
-
-    if (pagosError) {
-      throw new Error(pagosError.message);
-    }
-  }
+  await insertarPagosPedido(pedidoId, pagos, arqueoCajaId);
 
   const { error } = await supabase
     .from("pedidos")
