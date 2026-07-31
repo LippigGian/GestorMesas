@@ -419,6 +419,15 @@ type Props = {
 
 const CELL_SIZE = 80;
 const CELL_STEP = 112;
+const GRID_ROWS_STORAGE_KEY = 'mesas-grid-filas';
+const GRID_COLUMNS_STORAGE_KEY = 'mesas-grid-columnas';
+
+function leerDimensionGuardada(key: string, fallback: number) {
+  if (typeof window === 'undefined') return fallback;
+
+  const value = Number(window.localStorage.getItem(key));
+  return normalizarDimension(value || fallback);
+}
 
 function generarCeldas(
   cantidadFilas: number,
@@ -447,9 +456,38 @@ function normalizarNumeroMesa(numero: string) {
   return numero.trim().toLocaleLowerCase();
 }
 
+function obtenerDimensionesMinimas(celdasPorSector: { salon: Celda[]; deck: Celda[] }) {
+  const mesas = Object.values(celdasPorSector)
+    .flat()
+    .filter((celda) => celda.mesa);
+
+  return {
+    filas: Math.max(1, ...mesas.map((celda) => celda.y + 1)),
+    columnas: Math.max(1, ...mesas.map((celda) => celda.x + 1)),
+  };
+}
+
+function ubicarMesasEnCeldas(
+  celdas: Celda[],
+  mesas: Awaited<ReturnType<typeof obtenerMesas>>,
+  sector: 'salon' | 'deck'
+) {
+  return celdas.map((celda) => {
+    const encontrada = mesas.find(
+      (mesa) => mesa.sector === sector && mesa.x === celda.x && mesa.y === celda.y
+    );
+
+    return encontrada ? { ...celda, mesa: encontrada } : celda;
+  });
+}
+
 export function MesaGrid({ modoEdicion, sectorActual }: Props) {
-  const [cantidadFilas, setCantidadFilas] = useState(5);
-  const [cantidadColumnas, setCantidadColumnas] = useState(6);
+  const [cantidadFilas, setCantidadFilas] = useState(() =>
+    leerDimensionGuardada(GRID_ROWS_STORAGE_KEY, 5)
+  );
+  const [cantidadColumnas, setCantidadColumnas] = useState(() =>
+    leerDimensionGuardada(GRID_COLUMNS_STORAGE_KEY, 6)
+  );
 
   const [celdasPorSector, setCeldasPorSector] = useState<{
     salon: Celda[];
@@ -469,6 +507,15 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const [errorMesas, setErrorMesas] = useState<string | null>(null);
 
   const celdas = celdasPorSector[sectorActual] || [];
+  const dimensionesMinimas = obtenerDimensionesMinimas(celdasPorSector);
+
+  useEffect(() => {
+    window.localStorage.setItem(GRID_ROWS_STORAGE_KEY, String(cantidadFilas));
+  }, [cantidadFilas]);
+
+  useEffect(() => {
+    window.localStorage.setItem(GRID_COLUMNS_STORAGE_KEY, String(cantidadColumnas));
+  }, [cantidadColumnas]);
 
   // Actualiza grilla al cambiar filas/columnas
   useEffect(() => {
@@ -491,20 +538,19 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
           return;
         }
 
-        setCeldasPorSector((prev) => ({
-          salon: prev.salon.map((celda) => {
-            const encontrada = mesas.find(
-              (mesa) => mesa.sector === 'salon' && mesa.x === celda.x && mesa.y === celda.y
-            );
-            return encontrada ? { ...celda, mesa: encontrada } : celda;
-          }),
-          deck: prev.deck.map((celda) => {
-            const encontrada = mesas.find(
-              (mesa) => mesa.sector === 'deck' && mesa.x === celda.x && mesa.y === celda.y
-            );
-            return encontrada ? { ...celda, mesa: encontrada } : celda;
-          }),
-        }));
+        const filasNecesarias = Math.max(1, ...mesas.map((mesa) => mesa.y + 1));
+        const columnasNecesarias = Math.max(1, ...mesas.map((mesa) => mesa.x + 1));
+        const filasObjetivo = Math.max(cantidadFilas, filasNecesarias);
+        const columnasObjetivo = Math.max(cantidadColumnas, columnasNecesarias);
+        const salon = generarCeldas(filasObjetivo, columnasObjetivo);
+        const deck = generarCeldas(filasObjetivo, columnasObjetivo);
+
+        setCantidadFilas(filasObjetivo);
+        setCantidadColumnas(columnasObjetivo);
+        setCeldasPorSector({
+          salon: ubicarMesasEnCeldas(salon, mesas, 'salon'),
+          deck: ubicarMesasEnCeldas(deck, mesas, 'deck'),
+        });
       } catch (err) {
         if (mounted) {
           setErrorMesas(err instanceof Error ? err.message : 'No se pudieron cargar las mesas');
@@ -790,6 +836,13 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   };
 
   const mesaActual: Mesa | null = mesaSeleccionada ?? null;
+  const cambiarCantidadFilas = (value: number) => {
+    setCantidadFilas(Math.max(normalizarDimension(value), dimensionesMinimas.filas));
+  };
+
+  const cambiarCantidadColumnas = (value: number) => {
+    setCantidadColumnas(Math.max(normalizarDimension(value), dimensionesMinimas.columnas));
+  };
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -811,9 +864,9 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
               Filas
               <input
                 type="number"
-                min={1}
+                min={dimensionesMinimas.filas}
                 value={cantidadFilas}
-                onChange={(e) => setCantidadFilas(normalizarDimension(Number(e.target.value)))}
+                onChange={(e) => cambiarCantidadFilas(Number(e.target.value))}
                 className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
               />
             </label>
@@ -821,9 +874,9 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
               Columnas
               <input
                 type="number"
-                min={1}
+                min={dimensionesMinimas.columnas}
                 value={cantidadColumnas}
-                onChange={(e) => setCantidadColumnas(normalizarDimension(Number(e.target.value)))}
+                onChange={(e) => cambiarCantidadColumnas(Number(e.target.value))}
                 className="mt-1 w-20 rounded-md border bg-background px-2 py-1 text-foreground"
               />
             </label>
@@ -848,7 +901,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
                   {celda.mesa ? (
                     <div className="relative h-full w-full">
                       <DraggableMesa id={i.toString()}>
-                        <MesaCard
+                        <MesaMiniatura
                           numero={celda.mesa.numero}
                           tipo={celda.mesa.tipo}
                           estado={celda.mesa.estado}
@@ -870,7 +923,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
                           <Pencil className="h-3 w-3" />
                         </Button>
                         <Button
-                          className="h-6 w-6 shadow-sm"
+                          className="h-6 w-6 shadow-sm hover:bg-red-700 hover:text-white hover:ring-2 hover:ring-red-300"
                           size="icon"
                           type="button"
                           variant="destructive"
@@ -970,6 +1023,33 @@ function DroppableCelda({ id, children }: { id: string; children: React.ReactNod
       style={{ width: CELL_SIZE, height: CELL_SIZE }}
     >
       {children}
+    </div>
+  );
+}
+
+function MesaMiniatura({
+  numero,
+  tipo,
+  estado = 'libre',
+}: {
+  numero: string;
+  tipo: 'cuadrada' | 'redonda';
+  estado?: 'libre' | 'ocupada';
+}) {
+  const colorEstado =
+    estado === 'ocupada'
+      ? 'border-red-300 bg-red-100 text-red-800'
+      : 'border-emerald-300 bg-emerald-100 text-emerald-800';
+
+  return (
+    <div className="grid h-full w-full place-items-center p-2">
+      <div
+        className={`grid h-14 w-14 place-items-center border text-lg font-bold shadow-sm ${
+          tipo === 'redonda' ? 'rounded-full' : 'rounded-md'
+        } ${colorEstado}`}
+      >
+        {numero}
+      </div>
     </div>
   );
 }
