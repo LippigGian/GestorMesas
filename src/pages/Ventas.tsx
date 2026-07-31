@@ -37,6 +37,14 @@ function formatearMoneda(value: number) {
   return `$${value.toLocaleString()}`;
 }
 
+function claseDiferencia(value?: number) {
+  if (value === undefined || Math.abs(value) < 0.01) {
+    return "text-muted-foreground";
+  }
+
+  return value < 0 ? "text-red-600 font-semibold" : "text-emerald-700 font-semibold";
+}
+
 function crearFechaHoraLocalAhora() {
   const fecha = new Date();
   fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
@@ -733,7 +741,7 @@ function ArqueosCajaView({
                         ? "-"
                         : formatearMoneda(arqueo.montoFinalDeclarado)}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className={`p-3 text-right ${claseDiferencia(arqueo.diferencia)}`}>
                       {arqueo.diferencia === undefined ? "-" : formatearMoneda(arqueo.diferencia)}
                     </td>
                     <td className="p-3">{arqueo.estado}</td>
@@ -803,7 +811,11 @@ function ArqueosCajaView({
                           onChange={(event) => setDeclaracionCierre(medio.id, event.target.value)}
                         />
                       </label>
-                      <DetalleDato label="Diferencia" value={formatearMoneda(diferencia)} />
+                      <DetalleDato
+                        label="Diferencia"
+                        value={formatearMoneda(diferencia)}
+                        valueClassName={claseDiferencia(diferencia)}
+                      />
                     </div>
                   );
                 })}
@@ -815,7 +827,11 @@ function ArqueosCajaView({
                     <div className="mb-2 font-medium">{detalle.medioPagoNombre ?? "Medio de pago"}</div>
                     <DetalleDato label="Sistema" value={formatearMoneda(detalle.montoSistema)} />
                     <DetalleDato label="Usuario" value={formatearMoneda(detalle.montoDeclarado)} />
-                    <DetalleDato label="Diferencia" value={formatearMoneda(detalle.diferencia)} />
+                    <DetalleDato
+                      label="Diferencia"
+                      value={formatearMoneda(detalle.diferencia)}
+                      valueClassName={claseDiferencia(detalle.diferencia)}
+                    />
                   </div>
                 ))}
               </div>
@@ -1012,11 +1028,19 @@ function ResumenDato({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DetalleDato({ label, value }: { label: string; value: string }) {
+function DetalleDato({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="flex justify-between gap-4 border-b pb-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+      <span className={`font-medium ${valueClassName ?? ""}`}>{value}</span>
     </div>
   );
 }
