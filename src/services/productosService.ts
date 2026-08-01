@@ -109,9 +109,31 @@ export async function actualizarProducto(producto: Producto): Promise<Producto> 
       categoria_id: producto.categoriaId,
       nombre: producto.nombre,
       precio: producto.precio,
+      favorito: producto.favorito ?? false,
       updated_at: new Date().toISOString(),
     })
     .eq("id", producto.id)
+    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapProducto(data);
+}
+
+export async function actualizarFavoritoProducto(
+  productoId: string,
+  favorito: boolean
+): Promise<Producto> {
+  const { data, error } = await supabase
+    .from("productos")
+    .update({
+      favorito,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", productoId)
     .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
     .single();
 

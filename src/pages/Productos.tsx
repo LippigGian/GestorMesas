@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useProductosCatalogo } from "@/hooks/useProductosCatalogo";
 import { AgregarCategoriaDialog } from "@/components/productos/AgregarCategoriaDialog";
 import { AgregarProductoDialog } from "@/components/productos/AgregarProductoDialog";
-import { Edit, Trash2 } from "lucide-react";
+import { Edit, Star, Trash2 } from "lucide-react";
 import type { Producto } from "@/lib/types";
 import { EditarProductoDialog } from "@/components/productos/EditarProductoDialog";
 
@@ -11,6 +11,7 @@ export function Productos() {
   const {
     agregarCategoria,
     agregarProducto,
+    alternarFavoritoProducto,
     borrarProducto,
     borrarCategoriaSeleccionada,
     busqueda,
@@ -120,6 +121,7 @@ export function Productos() {
           <thead>
             <tr className="bg-secondary text-secondary-foreground">
               <th className="p-2 text-left">Producto</th>
+              <th className="w-16 p-2 text-center">Fav.</th>
               <th className="p-2 text-right">Precio</th>
               <th className="w-28 p-2 text-right">Acciones</th>
             </tr>
@@ -127,7 +129,7 @@ export function Productos() {
           <tbody>
             {cargando ? (
               <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={3}>
+                <td className="p-4 text-center text-muted-foreground" colSpan={4}>
                   Cargando productos...
                 </td>
               </tr>
@@ -135,6 +137,26 @@ export function Productos() {
               productosFiltrados.map((producto) => (
                 <tr key={producto.id} className="border-b transition hover:bg-muted/60">
                   <td className="p-2">{producto.nombre}</td>
+                  <td className="p-2 text-center">
+                    <Button
+                      className={
+                        producto.favorito
+                          ? "text-yellow-600 hover:text-yellow-700"
+                          : "text-muted-foreground"
+                      }
+                      disabled={guardando}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                      title={producto.favorito ? "Quitar de favoritos" : "Marcar como favorito"}
+                      onClick={() => alternarFavoritoProducto(producto)}
+                    >
+                      <Star
+                        className="h-4 w-4"
+                        fill={producto.favorito ? "currentColor" : "none"}
+                      />
+                    </Button>
+                  </td>
                   <td className="p-2 text-right">${producto.precio.toLocaleString()}</td>
                   <td className="p-2">
                     <div className="flex justify-end gap-1">
@@ -168,7 +190,7 @@ export function Productos() {
               ))
             ) : (
               <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={3}>
+                <td className="p-4 text-center text-muted-foreground" colSpan={4}>
                   No hay productos para mostrar.
                 </td>
               </tr>

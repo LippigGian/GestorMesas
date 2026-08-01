@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Categoria, Producto } from "@/lib/types";
 import {
+  actualizarFavoritoProducto,
   actualizarProducto,
   crearCategoria,
   crearProducto,
@@ -243,9 +244,34 @@ export function useProductosCatalogo() {
     }
   };
 
+  const alternarFavoritoProducto = async (producto: Producto) => {
+    try {
+      setGuardando(true);
+      setError(null);
+
+      const productoActualizado = await actualizarFavoritoProducto(
+        producto.id,
+        !producto.favorito
+      );
+
+      setProductos((prev) =>
+        prev.map((productoActual) =>
+          productoActual.id === productoActualizado.id ? productoActualizado : productoActual
+        )
+      );
+      await recargarCatalogo();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el favorito");
+      throw err;
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return {
     agregarCategoria,
     agregarProducto,
+    alternarFavoritoProducto,
     borrarProducto,
     busqueda,
     cargando,

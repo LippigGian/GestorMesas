@@ -53,6 +53,7 @@ export function MesaDetalleDialog({
   const productosDisponibles = productosActivos.filter(
     (producto) => normalizarBusqueda(producto.nombre).includes(busquedaNormalizada)
   );
+  const productosFavoritos = productosActivos.filter((producto) => producto.favorito);
 
   useEffect(() => {
     setCantidadPersonas("");
@@ -155,7 +156,7 @@ export function MesaDetalleDialog({
 
   if (!mesa) {
     return (
-      <aside className="flex min-h-[520px] w-full flex-col overflow-hidden rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] lg:w-[420px] xl:w-[480px]">
+      <aside className="flex min-h-[520px] w-full flex-col overflow-y-auto rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] lg:w-[420px] xl:w-[480px]">
         <div className="border-b bg-primary px-4 py-3 text-primary-foreground">
           <h2 className="text-lg font-bold">Mesa</h2>
         </div>
@@ -172,16 +173,134 @@ export function MesaDetalleDialog({
   }
 
   return (
-    <aside className="flex min-h-[520px] w-full flex-col overflow-hidden rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] lg:w-[420px] xl:w-[480px]">
+    <aside className="flex min-h-[520px] w-full flex-col overflow-y-auto rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] lg:w-[420px] xl:w-[480px]">
       <div className="border-b bg-primary px-4 py-3 text-primary-foreground">
         <h2 className="text-lg font-bold">Mesa {mesa.numero}</h2>
       </div>
 
       {mesa.estado === "ocupada" ? (
         <>
-          <div className="space-y-2 border-b p-4">
-            <p>Personas: {mesa.personas}</p>
-            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 text-sm">
+          <div className="space-y-3 border-b p-4">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Personas</span>
+              <span className="font-semibold">{mesa.personas}</span>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3>
+
+              {error && (
+                <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              {productosFavoritos.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Favoritos
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {productosFavoritos.map((producto) => (
+                      <Button
+                        key={producto.id}
+                        className="w-32 justify-start"
+                        size="sm"
+                        title={producto.nombre}
+                        type="button"
+                        variant="secondary"
+                        onClick={() => agregarPendiente(producto)}
+                      >
+                        <span className="block w-full truncate text-left">{producto.nombre}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Input
+                className="mb-2"
+                placeholder="Buscar producto..."
+                value={busqueda}
+                onChange={(event) => setBusqueda(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) {
+                    return;
+                  }
+
+                  if (!busquedaNormalizada || cargando || productosDisponibles.length === 0) {
+                    return;
+                  }
+
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setProductoResaltadoIndex((prev) => (prev + 1) % productosDisponibles.length);
+                    return;
+                  }
+
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setProductoResaltadoIndex(
+                      (prev) =>
+                        (prev - 1 + productosDisponibles.length) % productosDisponibles.length
+                    );
+                    return;
+                  }
+
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    agregarPendiente(
+                      productosDisponibles[productoResaltadoIndex] ?? productosDisponibles[0]
+                    );
+                  }
+                }}
+              />
+
+              {busquedaNormalizada && (
+                <div className="space-y-1 rounded-md border p-2">
+                  {cargando ? (
+                    <p className="p-2 text-sm text-muted-foreground">Cargando productos...</p>
+                  ) : productosDisponibles.length > 0 ? (
+                    productosDisponibles.map((producto, index) => (
+                      <div
+                        key={producto.id}
+                        className={`flex items-center justify-between rounded-md px-2 py-1 transition ${
+                          index === productoResaltadoIndex
+                            ? "bg-primary/10 ring-1 ring-primary/30"
+                            : "hover:bg-muted"
+                        }`}
+                        onMouseEnter={() => setProductoResaltadoIndex(index)}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{producto.nombre}</p>
+                          <p className="text-xs text-muted-foreground">
+                            ${producto.precio.toLocaleString()}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                          onClick={() => agregarPendiente(producto)}
+                        >
+                          Agregar
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="p-2 text-sm text-muted-foreground">
+                      No hay productos para mostrar.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3 border-b p-4">
+            <h3 className="text-sm font-semibold">Productos adicionados</h3>
+
+            <div className="space-y-1 text-sm">
               {pedidoItems.length > 0 ? (
                 pedidoItems.map((item) => {
                   const actualizandoEsteItem = itemActualizandoId === item.id;
@@ -242,9 +361,7 @@ export function MesaDetalleDialog({
                 </p>
               )}
             </div>
-          </div>
 
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
             {itemsPendientes.length > 0 && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
                 <p className="mb-1 text-sm font-semibold">Pendiente de confirmar</p>
@@ -277,101 +394,21 @@ export function MesaDetalleDialog({
                 </div>
               </div>
             )}
-            <p className="font-bold">Total: ${total.toLocaleString()}</p>
-
-            <div className="mt-4 border-t pt-4">
-              <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3>
-
-              {error && (
-                <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              <Input
-                className="mb-2"
-                placeholder="Buscar producto..."
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.nativeEvent.isComposing) {
-                    return;
-                  }
-
-                  if (!busquedaNormalizada || cargando || productosDisponibles.length === 0) {
-                    return;
-                  }
-
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setProductoResaltadoIndex((prev) => (prev + 1) % productosDisponibles.length);
-                    return;
-                  }
-
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setProductoResaltadoIndex(
-                      (prev) =>
-                        (prev - 1 + productosDisponibles.length) % productosDisponibles.length
-                    );
-                    return;
-                  }
-
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    agregarPendiente(
-                      productosDisponibles[productoResaltadoIndex] ?? productosDisponibles[0]
-                    );
-                  }
-                }}
-              />
-
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
-                {cargando ? (
-                  <p className="p-2 text-sm text-muted-foreground">Cargando productos...</p>
-                ) : productosDisponibles.length > 0 ? (
-                  productosDisponibles.map((producto, index) => (
-                    <div
-                      key={producto.id}
-                      className={`flex items-center justify-between rounded-md px-2 py-1 transition ${
-                        index === productoResaltadoIndex
-                          ? "bg-primary/10 ring-1 ring-primary/30"
-                          : "hover:bg-muted"
-                      }`}
-                      onMouseEnter={() => setProductoResaltadoIndex(index)}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{producto.nombre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          ${producto.precio.toLocaleString()}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        type="button"
-                        variant="secondary"
-                        onClick={() => agregarPendiente(producto)}
-                      >
-                        Agregar
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="p-2 text-sm text-muted-foreground">
-                    No hay productos para mostrar.
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t p-4">
-            <Button variant="secondary" onClick={onAplicarDescuento}>
-              Aplicar Descuento
-            </Button>
-            <Button variant="destructive" onClick={() => setMostrandoCierre(true)}>
-              Cerrar Mesa
-            </Button>
+          <div className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-4 rounded-md bg-muted px-3 py-2">
+              <span className="text-sm font-medium text-muted-foreground">Total</span>
+              <span className="text-xl font-bold text-foreground">${total.toLocaleString()}</span>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={onAplicarDescuento}>
+                Aplicar Descuento
+              </Button>
+              <Button variant="destructive" onClick={() => setMostrandoCierre(true)}>
+                Cerrar Mesa
+              </Button>
+            </div>
           </div>
           <CerrarPedidoDialog
             items={pedidoItems}

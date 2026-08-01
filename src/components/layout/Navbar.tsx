@@ -108,9 +108,9 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             <Link to="/mostrador">Mostrador</Link>
           </Button>
 
-          <Button variant="ghost" className={navButtonClass}>
+          {/* <Button variant="ghost" className={navButtonClass}>
             Delivery
-          </Button>
+          </Button> */}
         </nav>
 
         <div className="flex items-center gap-2 text-sm text-primary-foreground/85">
