@@ -248,6 +248,28 @@ export async function actualizarClientePedido(
   return mapPedido(data);
 }
 
+export async function actualizarPersonasPedido(
+  pedidoId: string,
+  personas: number
+): Promise<Pedido> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .update({
+      personas,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pedidoId)
+    .eq("estado", "abierto")
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapPedido(data);
+}
+
 export async function obtenerItemsPedido(pedidoId: string): Promise<PedidoItem[]> {
   const { data, error } = await supabase
     .from("pedido_items")

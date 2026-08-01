@@ -401,6 +401,7 @@ import {
 } from '@/services/mesasService';
 import {
   actualizarCantidadItemPedido,
+  actualizarPersonasPedido,
   confirmarProductosPedido,
   cerrarPedido,
   crearPedidoMesa,
@@ -726,6 +727,29 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     actualizarMesaEnSectores(mesaOcupada);
   };
 
+  const actualizarPersonasMesa = async (personas: number) => {
+    if (!mesaSeleccionada) return;
+
+    const mesaActualizada: Mesa = {
+      ...mesaSeleccionada,
+      personas,
+    };
+
+    try {
+      setErrorMesas(null);
+      await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
+      if (pedidoActivo) {
+        const pedidoActualizado = await actualizarPersonasPedido(pedidoActivo.id, personas);
+        setPedidoActivo(pedidoActualizado);
+      }
+      setMesaSeleccionada(mesaActualizada);
+      actualizarMesaEnSectores(mesaActualizada);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo actualizar la mesa');
+      throw err;
+    }
+  };
+
   const cerrarMesa = async (pagos: PagoPedidoInput[]) => {
     if (!mesaSeleccionada) return;
     try {
@@ -993,6 +1017,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
         onConfirmarProductos={confirmarProductosMesa}
         onActualizarCantidadItem={actualizarCantidadPedidoItem}
         onEliminarItem={eliminarPedidoItem}
+        onActualizarPersonas={actualizarPersonasMesa}
         onOcuparMesa={ocuparMesa}
         onCobroParcial={registrarCobroParcialMesa}
         onCerrarMesa={cerrarMesa}
