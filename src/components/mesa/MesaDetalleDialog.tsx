@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Mesa, Pedido, PedidoItem, Producto } from "@/lib/types";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCatalogo } from "@/context/CatalogoContext";
 import type { PagoPedidoInput, ProductoPendientePedido } from "@/services/pedidosService";
 import { ChevronDown, Minus, Plus, Trash2, Users } from "lucide-react";
@@ -42,6 +42,7 @@ export function MesaDetalleDialog({
   onCerrarMesa,
   onAplicarDescuento,
 }: Props) {
+  const cantidadPersonasInputRef = useRef<HTMLInputElement>(null);
   const [cantidadPersonas, setCantidadPersonas] = useState("");
   const [personasEditando, setPersonasEditando] = useState("");
   const [busqueda, setBusqueda] = useState("");
@@ -85,6 +86,12 @@ export function MesaDetalleDialog({
       productosDisponibles.length === 0 ? 0 : Math.min(prev, productosDisponibles.length - 1)
     );
   }, [productosDisponibles.length]);
+
+  useEffect(() => {
+    if (mesa && mesa.estado !== "ocupada") {
+      cantidadPersonasInputRef.current?.focus();
+    }
+  }, [mesa?.id, mesa?.estado]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
   const totalPendiente = itemsPendientes.reduce(
@@ -546,9 +553,18 @@ export function MesaDetalleDialog({
           <label htmlFor="personas">Cantidad de personas:</label>
           <Input
             id="personas"
-            type="number"
+            ref={cantidadPersonasInputRef}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            type="text"
             value={cantidadPersonas}
-            onChange={(e) => setCantidadPersonas(e.target.value)}
+            onChange={(event) => setCantidadPersonas(event.target.value.replace(/\D/g, ""))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                confirmarOcupacion();
+              }
+            }}
           />
           <Button disabled={confirmandoOcupacion} onClick={confirmarOcupacion}>
             {confirmandoOcupacion ? "Confirmando..." : "Confirmar"}

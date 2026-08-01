@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, ChevronDown, Minus, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CerrarPedidoDialog } from '@/components/pedidos/CerrarPedidoDialog';
@@ -56,6 +56,7 @@ export function Mostrador() {
   const [guardando, setGuardando] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
+  const [menuPedidoAbierto, setMenuPedidoAbierto] = useState(false);
   const [errorMostrador, setErrorMostrador] = useState<string | null>(null);
   const { cargando: cargandoCatalogo, error: errorCatalogo, productosActivos } = useCatalogo();
 
@@ -131,6 +132,7 @@ export function Mostrador() {
       setPedidoSeleccionado(pedido);
       setCliente(pedido.cliente ?? '');
       setItemsPendientes([]);
+      setMenuPedidoAbierto(false);
       setPedidoItems(await obtenerItemsPedido(pedido.id));
     } catch (err) {
       setErrorMostrador(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
@@ -146,6 +148,7 @@ export function Mostrador() {
       setPedidoSeleccionado(pedido);
       setPedidoItems([]);
       setItemsPendientes([]);
+      setMenuPedidoAbierto(false);
       setCliente('');
     } catch (err) {
       setErrorMostrador(err instanceof Error ? err.message : 'No se pudo crear el pedido');
@@ -251,6 +254,7 @@ export function Mostrador() {
       setPedidoSeleccionado(null);
       setPedidoItems([]);
       setItemsPendientes([]);
+      setMenuPedidoAbierto(false);
       setCliente('');
       setMostrandoCierre(false);
     } catch (err) {
@@ -330,10 +334,38 @@ export function Mostrador() {
         </section>
 
         <aside className="flex min-h-[560px] w-full flex-col overflow-hidden rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] lg:w-[460px] xl:w-[520px]">
-          <div className="border-b bg-primary px-4 py-3 text-primary-foreground">
+          <div className="relative flex items-center justify-between gap-3 border-b bg-primary px-4 py-3 text-primary-foreground">
             <h3 className="text-lg font-bold">
               {pedidoSeleccionado ? crearTituloPedido(pedidoSeleccionado) : 'Mostrador'}
             </h3>
+            {pedidoSeleccionado && (
+              <div className="relative">
+                <Button
+                  className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setMenuPedidoAbierto((prev) => !prev)}
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Pedido
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+
+                {menuPedidoAbierto && (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-md border bg-card text-card-foreground shadow-lg">
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm text-muted-foreground"
+                      disabled
+                      title="Disponible mas adelante"
+                      type="button"
+                    >
+                      Mover pedido a mesa
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {pedidoSeleccionado ? (
