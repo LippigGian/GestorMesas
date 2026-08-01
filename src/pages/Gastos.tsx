@@ -32,6 +32,12 @@ function crearFechaHoraLocalAhora() {
   return fecha.toISOString().slice(0, 16);
 }
 
+function crearFechaLocalHoy() {
+  const fecha = new Date();
+  fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
+  return fecha.toISOString().slice(0, 10);
+}
+
 function fechaInputDesdeIso(value: string) {
   const fecha = new Date(value);
   fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
@@ -99,6 +105,19 @@ function formDesdeGasto(gasto: Gasto): GastoFormState {
   };
 }
 
+function gastoDentroDeFechas(gasto: Gasto, fechaDesde: string, fechaHasta: string) {
+  const fecha = new Date(gasto.fecha).getTime();
+  const desde = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+  const hastaDate = fechaHasta ? new Date(`${fechaHasta}T00:00:00`) : null;
+
+  if (hastaDate) {
+    hastaDate.setDate(hastaDate.getDate() + 1);
+  }
+
+  const hasta = hastaDate?.getTime() ?? Number.POSITIVE_INFINITY;
+  return fecha >= desde && fecha < hasta;
+}
+
 export function Gastos() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
@@ -106,6 +125,8 @@ export function Gastos() {
   const [gastoSeleccionado, setGastoSeleccionado] = useState<Gasto | null>(null);
   const [modoPanel, setModoPanel] = useState<"vacio" | "detalle" | "nuevo" | "editar">("vacio");
   const [form, setForm] = useState<GastoFormState>(crearFormVacio);
+  const [fechaDesde, setFechaDesde] = useState(crearFechaLocalHoy);
+  const [fechaHasta, setFechaHasta] = useState(crearFechaLocalHoy);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +141,7 @@ export function Gastos() {
       setCargando(true);
       setError(null);
       const [gastosDb, mediosDb, proveedoresDb] = await Promise.all([
-        obtenerGastos(),
+        obtenerGastos({ fechaDesde, fechaHasta }),
         obtenerMediosPago(),
         obtenerProveedores(),
       ]);
@@ -145,7 +166,7 @@ export function Gastos() {
   useEffect(() => {
     cargarDatos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fechaDesde, fechaHasta]);
 
   const abrirNuevo = () => {
     setError(null);
@@ -213,6 +234,12 @@ export function Gastos() {
 
       setGastos((prev) => {
         const existe = prev.some((gasto) => gasto.id === guardado.id);
+        const debeMostrarse = gastoDentroDeFechas(guardado, fechaDesde, fechaHasta);
+
+        if (!debeMostrarse) {
+          return prev.filter((gasto) => gasto.id !== guardado.id);
+        }
+
         const next = existe
           ? prev.map((gasto) => (gasto.id === guardado.id ? guardado : gasto))
           : [guardado, ...prev];
@@ -269,6 +296,32 @@ export function Gastos() {
             label="Arqueo abierto"
             value={gastos.some((gasto) => gasto.arqueoCajaEstado === "abierto") ? "Con gastos" : "-"}
           />
+        </section>
+
+        <section className="mb-4 rounded-md border bg-card p-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <label className="block text-sm font-medium">
+              Desde
+              <Input
+                className="mt-1"
+                type="date"
+                value={fechaDesde}
+                onChange={(event) => setFechaDesde(event.target.value)}
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Hasta
+              <Input
+                className="mt-1"
+                type="date"
+                value={fechaHasta}
+                onChange={(event) => setFechaHasta(event.target.value)}
+              />
+            </label>
+            <Button disabled={cargando} type="button" variant="secondary" onClick={cargarDatos}>
+              Actualizar
+            </Button>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-md border bg-card">

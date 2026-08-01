@@ -10,6 +10,11 @@ export type GastoInput = {
   medioPagoId: string;
 };
 
+export type ObtenerGastosFiltros = {
+  fechaDesde?: string;
+  fechaHasta?: string;
+};
+
 type GastoRow = {
   id: string;
   arqueo_caja_id: string;
@@ -109,11 +114,23 @@ async function asegurarArqueoAbierto(arqueoCajaId: string) {
   }
 }
 
-export async function obtenerGastos(): Promise<Gasto[]> {
-  const { data, error } = await supabase
+export async function obtenerGastos(filtros: ObtenerGastosFiltros = {}): Promise<Gasto[]> {
+  let query = supabase
     .from("gastos")
     .select(selectGasto)
     .order("fecha", { ascending: false });
+
+  if (filtros.fechaDesde) {
+    query = query.gte("fecha", new Date(`${filtros.fechaDesde}T00:00:00`).toISOString());
+  }
+
+  if (filtros.fechaHasta) {
+    const hasta = new Date(`${filtros.fechaHasta}T00:00:00`);
+    hasta.setDate(hasta.getDate() + 1);
+    query = query.lt("fecha", hasta.toISOString());
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
