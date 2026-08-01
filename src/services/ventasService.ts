@@ -40,7 +40,11 @@ export type ObtenerVentasFiltros = {
   fechaHasta?: string;
   estado?: EstadoVentaFiltro;
   tipo?: TipoVentaFiltro;
-  turnoId?: string;
+  turno?: {
+    id: string;
+    horaInicio: string;
+    horaFin: string;
+  };
   medioPagoId?: string;
   mesaId?: string;
 };
@@ -128,6 +132,32 @@ function fechaHastaExclusiva(fecha: string) {
   return date.toISOString();
 }
 
+function horaEnTurno(hora: string, inicio: string, fin: string) {
+  const horaNormalizada = hora.slice(0, 5);
+  const inicioNormalizado = inicio.slice(0, 5);
+  const finNormalizado = fin.slice(0, 5);
+
+  if (inicioNormalizado < finNormalizado) {
+    return horaNormalizada >= inicioNormalizado && horaNormalizada < finNormalizado;
+  }
+
+  return horaNormalizada >= inicioNormalizado || horaNormalizada < finNormalizado;
+}
+
+function ventaPerteneceATurno(row: VentaRow, turno: NonNullable<ObtenerVentasFiltros["turno"]>) {
+  if (row.turno_id === turno.id) {
+    return true;
+  }
+
+  const fechaReferencia = new Date(row.closed_at ?? row.created_at);
+
+  if (Number.isNaN(fechaReferencia.getTime())) {
+    return false;
+  }
+
+  return horaEnTurno(fechaReferencia.toTimeString().slice(0, 5), turno.horaInicio, turno.horaFin);
+}
+
 export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<VentaResumen[]> {
   let query = supabase
     .from("pedidos")
@@ -168,10 +198,6 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
     query = query.eq("tipo", filtros.tipo);
   }
 
-  if (filtros.turnoId) {
-    query = query.eq("turno_id", filtros.turnoId);
-  }
-
   if (filtros.mesaId) {
     query = query.eq("mesa_id", filtros.mesaId);
   }
@@ -183,6 +209,10 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
   }
 
   let rows = (data ?? []) as unknown as VentaRow[];
+
+  if (filtros.turno) {
+    rows = rows.filter((venta) => ventaPerteneceATurno(venta, filtros.turno!));
+  }
 
   if (!filtros.medioPagoId) {
     return rows.map(mapVenta);

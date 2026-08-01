@@ -70,6 +70,10 @@ function parseMonto(value: string, campo: string, permiteVacio = false) {
     return 0;
   }
 
+  if (limpio === "") {
+    throw new Error(`${campo} es obligatorio.`);
+  }
+
   if (!/^\d+(\.\d{1,2})?$/.test(limpio)) {
     throw new Error(`${campo} debe ser un numero valido.`);
   }
@@ -81,6 +85,10 @@ function parseMonto(value: string, campo: string, permiteVacio = false) {
   }
 
   return monto;
+}
+
+function esMontoPositivoInput(value: string) {
+  return /^\d*(?:[,.]\d{0,2})?$/.test(value);
 }
 
 function crearPagoEdicionId() {
@@ -137,7 +145,7 @@ export function Ventas() {
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [arqueoSeleccionado, setArqueoSeleccionado] = useState<ArqueoCaja | null>(null);
   const [cajaId, setCajaId] = useState("");
-  const [montoInicial, setMontoInicial] = useState("0");
+  const [montoInicial, setMontoInicial] = useState("");
   const [fechaHoraApertura, setFechaHoraApertura] = useState(crearFechaHoraLocalAhora);
   const [declaracionesCierre, setDeclaracionesCierre] = useState<Record<string, string>>({});
   const [detalleMediosSeleccionado, setDetalleMediosSeleccionado] = useState<
@@ -217,7 +225,7 @@ export function Ventas() {
       setArqueos((prev) => [creado, ...prev]);
       setArqueoSeleccionado(creado);
       setDetalleMediosSeleccionado([]);
-      setMontoInicial("0");
+      setMontoInicial("");
       setFechaHoraApertura(crearFechaHoraLocalAhora());
     } catch (err) {
       setErrorArqueos(err instanceof Error ? err.message : "No se pudo abrir el arqueo");
@@ -381,12 +389,19 @@ function VentasView() {
     try {
       setCargando(true);
       setError(null);
+      const turnoSeleccionado = turnos.find((turno) => turno.id === turnoId);
       const ventasDb = await obtenerVentas({
         fechaDesde,
         fechaHasta,
         estado,
         tipo,
-        turnoId,
+        turno: turnoSeleccionado
+          ? {
+              id: turnoSeleccionado.id,
+              horaInicio: turnoSeleccionado.horaInicio,
+              horaFin: turnoSeleccionado.horaFin,
+            }
+          : undefined,
         medioPagoId,
         mesaId,
       });
@@ -435,7 +450,7 @@ function VentasView() {
   useEffect(() => {
     cargarVentas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fechaDesde, fechaHasta, estado, tipo, turnoId, medioPagoId, mesaId, turnos]);
 
   const resumen = useMemo(() => {
     const total = ventas.reduce((acc, venta) => acc + venta.total, 0);
@@ -798,15 +813,26 @@ function ArqueosCajaView({
             value={fechaHoraApertura}
             onChange={(event) => setFechaHoraApertura(event.target.value)}
           />
-          <Input
-            min={0}
-            step={0.01}
-            placeholder="Monto inicial"
-            inputMode="decimal"
-            type="text"
-            value={montoInicial}
-            onChange={(event) => setMontoInicial(event.target.value)}
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
+              $
+            </span>
+            <Input
+              className="pl-7"
+              min={0}
+              step={0.01}
+              placeholder="Monto inicial"
+              inputMode="decimal"
+              type="text"
+              value={montoInicial}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (esMontoPositivoInput(value)) {
+                  setMontoInicial(value);
+                }
+              }}
+            />
+          </div>
         </div>
 
         <section className="mb-6 grid gap-4 rounded-md border bg-card p-4 md:grid-cols-5">
@@ -915,14 +941,24 @@ function ArqueosCajaView({
                       <DetalleDato label="Sistema" value={formatearMoneda(montoSistema)} />
                       <label className="mt-2 block text-xs font-medium text-muted-foreground">
                         Usuario
-                        <Input
-                          className="mt-1"
-                          inputMode="decimal"
-                          placeholder="$0"
-                          type="text"
-                          value={declaracionesCierre[medio.id] ?? ""}
-                          onChange={(event) => setDeclaracionCierre(medio.id, event.target.value)}
-                        />
+                        <div className="relative mt-1">
+                          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            className="pl-7"
+                            inputMode="decimal"
+                            placeholder="0"
+                            type="text"
+                            value={declaracionesCierre[medio.id] ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (esMontoPositivoInput(value)) {
+                                setDeclaracionCierre(medio.id, value);
+                              }
+                            }}
+                          />
+                        </div>
                       </label>
                       <DetalleDato
                         label="Diferencia"
