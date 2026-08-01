@@ -78,6 +78,7 @@ type VentaRow = {
     precio_unitario: number;
     cantidad: number;
     subtotal: number;
+    comentario?: string | null;
   }> | null;
 };
 
@@ -122,6 +123,7 @@ function mapVenta(row: VentaRow): VentaResumen {
       precioUnitario: Number(item.precio_unitario),
       cantidad: item.cantidad,
       subtotal: Number(item.subtotal),
+      comentario: item.comentario ?? undefined,
     })),
   };
 }
@@ -177,7 +179,7 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
         "mesas(numero)",
         "turnos(nombre)",
         "pedido_pagos(id, medio_pago_id, arqueo_caja_id, monto, medios_pago(nombre))",
-        "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal)",
+        "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal, comentario)",
       ].join(", ")
     )
     .order("created_at", { ascending: false });
@@ -244,7 +246,7 @@ export async function obtenerVentaPorId(ventaId: string): Promise<VentaResumen> 
         "mesas(numero)",
         "turnos(nombre)",
         "pedido_pagos(id, medio_pago_id, arqueo_caja_id, monto, medios_pago(nombre))",
-        "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal)",
+        "pedido_items(id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal, comentario)",
       ].join(", ")
     )
     .eq("id", ventaId)

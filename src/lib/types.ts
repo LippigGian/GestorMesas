@@ -38,6 +38,7 @@ export type PedidoItem = {
   precioUnitario: number;
   cantidad: number;
   subtotal: number;
+  comentario?: string;
 };
 
 export type MedioPago = {

@@ -20,6 +20,7 @@ type PedidoItemRow = {
   precio_unitario: number;
   cantidad: number;
   subtotal: number;
+  comentario?: string | null;
 };
 
 function mapPedido(row: PedidoRow): Pedido {
@@ -44,6 +45,7 @@ function mapPedidoItem(row: PedidoItemRow): PedidoItem {
     precioUnitario: Number(row.precio_unitario),
     cantidad: row.cantidad,
     subtotal: Number(row.subtotal),
+    comentario: row.comentario ?? undefined,
   };
 }
 
@@ -273,7 +275,7 @@ export async function actualizarPersonasPedido(
 export async function obtenerItemsPedido(pedidoId: string): Promise<PedidoItem[]> {
   const { data, error } = await supabase
     .from("pedido_items")
-    .select("id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal")
+    .select("id, pedido_id, producto_id, nombre_producto, precio_unitario, cantidad, subtotal, comentario")
     .eq("pedido_id", pedidoId)
     .order("created_at");
 
@@ -303,6 +305,7 @@ export type ProductoPendientePedido = {
   nombreProducto: string;
   precioUnitario: number;
   cantidad: number;
+  comentario?: string;
 };
 
 export type PagoPedidoInput = {
@@ -431,12 +434,19 @@ export async function confirmarProductosPedido(
   productos: ProductoPendientePedido[]
 ): Promise<PedidoItem[]> {
   for (const producto of productos) {
-    const { data: itemExistente, error: itemError } = await supabase
+    const comentario = producto.comentario?.trim() || null;
+    let itemExistenteQuery = supabase
       .from("pedido_items")
       .select("id, cantidad")
       .eq("pedido_id", pedidoId)
       .eq("producto_id", producto.productoId)
-      .maybeSingle();
+      .eq("precio_unitario", producto.precioUnitario);
+
+    itemExistenteQuery = comentario
+      ? itemExistenteQuery.eq("comentario", comentario)
+      : itemExistenteQuery.is("comentario", null);
+
+    const { data: itemExistente, error: itemError } = await itemExistenteQuery.maybeSingle();
 
     if (itemError) {
       throw new Error(itemError.message);
@@ -449,6 +459,7 @@ export async function confirmarProductosPedido(
         .update({
           cantidad: nuevaCantidad,
           subtotal: nuevaCantidad * producto.precioUnitario,
+          comentario,
           updated_at: new Date().toISOString(),
         })
         .eq("id", itemExistente.id);
@@ -464,6 +475,7 @@ export async function confirmarProductosPedido(
         precio_unitario: producto.precioUnitario,
         cantidad: producto.cantidad,
         subtotal: producto.precioUnitario * producto.cantidad,
+        comentario,
       });
 
       if (error) {

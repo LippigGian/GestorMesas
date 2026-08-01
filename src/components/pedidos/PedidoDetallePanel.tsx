@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Minus, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CerrarPedidoDialog } from "@/components/pedidos/CerrarPedidoDialog";
@@ -26,12 +26,30 @@ type PedidoDetallePanelProps = {
   onAplicarDescuento?: () => void;
 };
 
+type ProductoPendienteUI = ProductoPendientePedido & {
+  id: string;
+  totalInput: string;
+};
+
 function normalizarBusqueda(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "")
     .toLocaleLowerCase();
+}
+
+function esPrecioInput(value: string) {
+  return /^\d*(?:[,.]\d{0,2})?$/.test(value);
+}
+
+function parsePrecioInput(value: string) {
+  const precio = Number(value.trim().replace(",", "."));
+  return Number.isFinite(precio) && precio > 0 ? precio : null;
+}
+
+function formatearMontoInput(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 export function PedidoDetallePanel({
@@ -56,8 +74,9 @@ export function PedidoDetallePanel({
   const [confirmando, setConfirmando] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
-  const [itemsPendientes, setItemsPendientes] = useState<ProductoPendientePedido[]>([]);
+  const [itemsPendientes, setItemsPendientes] = useState<ProductoPendienteUI[]>([]);
   const [productoResaltadoIndex, setProductoResaltadoIndex] = useState(0);
+  const [errorPendientes, setErrorPendientes] = useState<string | null>(null);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
   const productosDisponibles = useMemo(
@@ -81,6 +100,7 @@ export function PedidoDetallePanel({
     setMostrandoCierre(false);
     setItemsPendientes([]);
     setProductoResaltadoIndex(0);
+    setErrorPendientes(null);
   }, [pedido?.id]);
 
   useEffect(() => {
@@ -94,29 +114,45 @@ export function PedidoDetallePanel({
   }, [productosDisponibles.length]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
-  const totalPendiente = itemsPendientes.reduce(
-    (acc, item) => acc + item.precioUnitario * item.cantidad,
-    0
-  );
-  const total = totalConfirmado + totalPendiente;
+  const totalPendiente = itemsPendientes.reduce((acc, item) => {
+    const totalItem = parsePrecioInput(item.totalInput);
+    return acc + (totalItem ?? 0);
+  }, 0);
+  const total = totalConfirmado;
 
   const agregarPendiente = (producto: Producto) => {
+    setErrorPendientes(null);
     setItemsPendientes((prev) => {
-      const existente = prev.find((item) => item.productoId === producto.id);
+      const existente = prev.find(
+        (item) =>
+          item.productoId === producto.id &&
+          item.precioUnitario === producto.precio &&
+          parsePrecioInput(item.totalInput) === item.cantidad * producto.precio &&
+          !item.comentario
+      );
 
       if (existente) {
         return prev.map((item) =>
-          item.productoId === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+          item.id === existente.id
+            ? {
+                ...item,
+                cantidad: item.cantidad + 1,
+                totalInput: formatearMontoInput((item.cantidad + 1) * producto.precio),
+              }
+            : item
         );
       }
 
       return [
         ...prev,
         {
+          id: crypto.randomUUID(),
           productoId: producto.id,
           nombreProducto: producto.nombre,
           precioUnitario: producto.precio,
+          totalInput: formatearMontoInput(producto.precio),
           cantidad: 1,
+          comentario: "",
         },
       ];
     });
@@ -127,13 +163,69 @@ export function PedidoDetallePanel({
   const confirmarPendientes = async () => {
     if (itemsPendientes.length === 0) return;
 
+    let productosNormalizados: ProductoPendientePedido[] = [];
+
+    try {
+      productosNormalizados = itemsPendientes.map((item) => {
+        const totalItem = parsePrecioInput(item.totalInput);
+
+        if (totalItem === null) {
+          throw new Error("Revisa los precios de los productos pendientes.");
+        }
+
+        return {
+          productoId: item.productoId,
+          nombreProducto: item.nombreProducto,
+          precioUnitario: totalItem / item.cantidad,
+          cantidad: item.cantidad,
+          comentario: item.comentario?.trim() || undefined,
+        };
+      });
+    } catch (err) {
+      setErrorPendientes(
+        err instanceof Error ? err.message : "Revisa los productos pendientes."
+      );
+      return;
+    }
+
     try {
       setConfirmando(true);
-      await onConfirmarProductos(itemsPendientes);
+      setErrorPendientes(null);
+      await onConfirmarProductos(productosNormalizados);
       setItemsPendientes([]);
+    } catch (err) {
+      setErrorPendientes(err instanceof Error ? err.message : "No se pudo confirmar la carga.");
     } finally {
       setConfirmando(false);
     }
+  };
+
+  const actualizarPendiente = (itemId: string, patch: Partial<ProductoPendienteUI>) => {
+    setErrorPendientes(null);
+    setItemsPendientes((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, ...patch } : item))
+    );
+  };
+
+  const cambiarCantidadPendiente = (itemId: string, cantidad: number) => {
+    setErrorPendientes(null);
+    setItemsPendientes((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const cantidadActual = Math.max(1, item.cantidad);
+        const cantidadNueva = Math.max(1, cantidad);
+        const totalActual = parsePrecioInput(item.totalInput);
+        const totalNuevo =
+          totalActual === null ? item.precioUnitario * cantidadNueva : (totalActual / cantidadActual) * cantidadNueva;
+
+        return {
+          ...item,
+          cantidad: cantidadNueva,
+          totalInput: formatearMontoInput(totalNuevo),
+        };
+      })
+    );
   };
 
   const cambiarCantidadItem = async (item: PedidoItem, cantidad: number) => {
@@ -298,6 +390,11 @@ export function PedidoDetallePanel({
                           ${item.precioUnitario.toLocaleString()} c/u - $
                           {item.subtotal.toLocaleString()}
                         </p>
+                        {item.comentario && (
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {item.comentario}
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Button
@@ -346,16 +443,93 @@ export function PedidoDetallePanel({
 
             {itemsPendientes.length > 0 && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
-                <p className="mb-1 text-sm font-semibold">Pendiente de confirmar</p>
-                <ul className="space-y-1 text-sm">
+                <p className="mb-2 text-sm font-semibold">Pendiente de confirmar</p>
+                {errorPendientes && (
+                  <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
+                    {errorPendientes}
+                  </div>
+                )}
+                <div className="space-y-2 text-sm">
                   {itemsPendientes.map((item) => (
-                    <li key={item.productoId}>
-                      {item.nombreProducto} x{item.cantidad} - $
-                      {(item.precioUnitario * item.cantidad).toLocaleString()}
-                    </li>
+                    <div key={item.id} className="rounded-md border bg-card p-2">
+                      <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
+                        <div className="flex items-center overflow-hidden rounded-md border">
+                          <Button
+                            className="h-9 rounded-none border-0"
+                            disabled={item.cantidad <= 1}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => cambiarCantidadPendiente(item.id, item.cantidad - 1)}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <span className="grid h-9 min-w-10 place-items-center border-x px-2 font-semibold">
+                            {item.cantidad}
+                          </span>
+                          <Button
+                            className="h-9 rounded-none border-0"
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => cambiarCantidadPendiente(item.id, item.cantidad + 1)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="min-w-0 truncate font-semibold" title={item.nombreProducto}>
+                          {item.nombreProducto}
+                        </p>
+                        <div className="flex items-center gap-1" title="Total de este producto antes de confirmar">
+                          <span className="text-muted-foreground">$</span>
+                          <Input
+                            className="h-9 w-24 text-right"
+                            inputMode="decimal"
+                            aria-label={`Total pendiente de ${item.nombreProducto}`}
+                            value={item.totalInput}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (!esPrecioInput(value)) return;
+
+                              actualizarPendiente(item.id, {
+                                totalInput: value,
+                                precioUnitario: (parsePrecioInput(value) ?? 0) / item.cantidad,
+                              });
+                            }}
+                          />
+                        </div>
+                        <Button
+                          size="icon"
+                          title="Quitar de pendientes"
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setItemsPendientes((prev) =>
+                              prev.filter((pendiente) => pendiente.id !== item.id)
+                            )
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Input
+                          placeholder="Agrega un comentario aqui..."
+                          value={item.comentario ?? ""}
+                          onChange={(event) =>
+                            actualizarPendiente(item.id, { comentario: event.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
                 <div className="mt-2 flex justify-end gap-2">
+                  <div className="mr-auto flex items-center rounded-md bg-muted px-3 py-1 text-sm">
+                    <span className="text-muted-foreground">Total a confirmar</span>
+                    <span className="ml-2 font-bold">${totalPendiente.toLocaleString()}</span>
+                  </div>
                   <Button
                     disabled={confirmando}
                     size="sm"

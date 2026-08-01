@@ -225,7 +225,14 @@ export function CerrarPedidoDialog({
                 items.map((item) => (
                   <div key={item.id} className="grid grid-cols-[3rem_1fr_auto] gap-3 px-3 py-2 text-sm">
                     <span>{item.cantidad}</span>
-                    <span className="font-medium">{item.nombreProducto}</span>
+                    <span>
+                      <span className="block font-medium">{item.nombreProducto}</span>
+                      {item.comentario && (
+                        <span className="block text-xs text-muted-foreground">
+                          {item.comentario}
+                        </span>
+                      )}
+                    </span>
                     <span>${item.subtotal.toLocaleString()}</span>
                   </div>
                 ))
