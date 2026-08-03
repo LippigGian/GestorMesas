@@ -402,6 +402,7 @@ import {
 import {
   actualizarCantidadItemPedido,
   actualizarPersonasPedido,
+  aplicarDescuentoPedido,
   confirmarProductosPedido,
   cerrarPedido,
   crearPedidoMesa,
@@ -409,6 +410,7 @@ import {
   obtenerItemsPedido,
   obtenerPedidoAbiertoPorMesa,
   registrarPagoParcialPedido,
+  type DescuentoPedidoInput,
   type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
@@ -845,18 +847,17 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     }
   };
 
-  const aplicarDescuento = () => {
-    if (!mesaSeleccionada) return;
-    const mesaConDescuento: Mesa = {
-      ...mesaSeleccionada,
-      productos: mesaSeleccionada.productos?.map((p) => ({
-        ...p,
-        precio: Math.round(p.precio * 0.9),
-      })),
-    };
+  const aplicarDescuento = async (descuento: DescuentoPedidoInput) => {
+    if (!pedidoActivo) return;
 
-    setMesaSeleccionada(mesaConDescuento);
-    actualizarMesaEnSectores(mesaConDescuento);
+    try {
+      setErrorMesas(null);
+      const items = await aplicarDescuentoPedido(pedidoActivo.id, descuento);
+      actualizarTotalPedidoActivo(items);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo aplicar el descuento');
+      throw err;
+    }
   };
 
   const mesaActual: Mesa | null = mesaSeleccionada ?? null;

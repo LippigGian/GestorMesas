@@ -313,6 +313,11 @@ export type PagoPedidoInput = {
   monto: number;
 };
 
+export type DescuentoPedidoInput = {
+  tipo: "monto" | "porcentaje";
+  valor: number;
+};
+
 export type PagoPedido = PagoPedidoInput & {
   id: string;
 };
@@ -481,6 +486,75 @@ export async function confirmarProductosPedido(
       if (error) {
         throw new Error(error.message);
       }
+    }
+  }
+
+  await recalcularTotalPedido(pedidoId);
+  return obtenerItemsPedido(pedidoId);
+}
+
+export async function aplicarDescuentoPedido(
+  pedidoId: string,
+  descuento: DescuentoPedidoInput
+): Promise<PedidoItem[]> {
+  if (!Number.isFinite(descuento.valor) || descuento.valor <= 0) {
+    throw new Error("El descuento debe ser mayor a cero.");
+  }
+
+  const items = await obtenerItemsPedido(pedidoId);
+  const subtotal = items
+    .filter((item) => item.subtotal > 0)
+    .reduce((acc, item) => acc + item.subtotal, 0);
+
+  if (subtotal <= 0) {
+    throw new Error("Agrega productos antes de aplicar un descuento.");
+  }
+
+  const montoDescuento =
+    descuento.tipo === "porcentaje" ? subtotal * (descuento.valor / 100) : descuento.valor;
+  const montoNormalizado = Math.min(subtotal, Math.round(montoDescuento * 100) / 100);
+
+  if (montoNormalizado <= 0) {
+    throw new Error("El descuento debe ser mayor a cero.");
+  }
+
+  const detalle =
+    descuento.tipo === "porcentaje"
+      ? `${descuento.valor}% sobre $${subtotal.toLocaleString()}`
+      : `Monto fijo`;
+  const itemDescuento = items.find(
+    (item) => !item.productoId && item.nombreProducto === "Descuento"
+  );
+
+  if (itemDescuento) {
+    const { error } = await supabase
+      .from("pedido_items")
+      .update({
+        precio_unitario: -montoNormalizado,
+        cantidad: 1,
+        subtotal: -montoNormalizado,
+        comentario: detalle,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", itemDescuento.id)
+      .eq("pedido_id", pedidoId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } else {
+    const { error } = await supabase.from("pedido_items").insert({
+      pedido_id: pedidoId,
+      producto_id: null,
+      nombre_producto: "Descuento",
+      precio_unitario: -montoNormalizado,
+      cantidad: 1,
+      subtotal: -montoNormalizado,
+      comentario: detalle,
+    });
+
+    if (error) {
+      throw new Error(error.message);
     }
   }
 

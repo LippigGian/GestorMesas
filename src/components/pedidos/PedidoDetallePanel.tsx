@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { MessageSquare, Minus, Plus, Trash2, X } from "lucide-react";
+import { MessageSquare, Minus, Percent, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CerrarPedidoDialog } from "@/components/pedidos/CerrarPedidoDialog";
 import { useCatalogo } from "@/context/CatalogoContext";
 import type { Pedido, PedidoItem, Producto } from "@/lib/types";
-import type { PagoPedidoInput, ProductoPendientePedido } from "@/services/pedidosService";
+import type {
+  DescuentoPedidoInput,
+  PagoPedidoInput,
+  ProductoPendientePedido,
+} from "@/services/pedidosService";
 
 type PedidoDetallePanelProps = {
   pedido: Pedido | null;
@@ -23,7 +27,7 @@ type PedidoDetallePanelProps = {
   onEliminarItem: (itemId: string) => Promise<void> | void;
   onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onCerrarPedido: (pagos: PagoPedidoInput[]) => Promise<void> | void;
-  onAplicarDescuento?: () => void;
+  onAplicarDescuento?: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };
 
 type ProductoPendienteUI = ProductoPendientePedido & {
@@ -77,6 +81,11 @@ export function PedidoDetallePanel({
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendienteUI[]>([]);
   const [productoResaltadoIndex, setProductoResaltadoIndex] = useState(0);
   const [errorPendientes, setErrorPendientes] = useState<string | null>(null);
+  const [mostrandoDescuento, setMostrandoDescuento] = useState(false);
+  const [tipoDescuento, setTipoDescuento] = useState<DescuentoPedidoInput["tipo"]>("monto");
+  const [valorDescuento, setValorDescuento] = useState("");
+  const [aplicandoDescuento, setAplicandoDescuento] = useState(false);
+  const [errorDescuento, setErrorDescuento] = useState<string | null>(null);
   const { cargando, error, productosActivos } = useCatalogo();
   const busquedaNormalizada = normalizarBusqueda(busqueda);
   const productosDisponibles = useMemo(
@@ -101,6 +110,11 @@ export function PedidoDetallePanel({
     setItemsPendientes([]);
     setProductoResaltadoIndex(0);
     setErrorPendientes(null);
+    setMostrandoDescuento(false);
+    setTipoDescuento("monto");
+    setValorDescuento("");
+    setAplicandoDescuento(false);
+    setErrorDescuento(null);
   }, [pedido?.id]);
 
   useEffect(() => {
@@ -114,6 +128,15 @@ export function PedidoDetallePanel({
   }, [productosDisponibles.length]);
 
   const totalConfirmado = pedido?.total ?? pedidoItems.reduce((acc, item) => acc + item.subtotal, 0);
+  const subtotalSinDescuento = pedidoItems
+    .filter((item) => item.subtotal > 0)
+    .reduce((acc, item) => acc + item.subtotal, 0);
+  const descuentoAplicado = Math.abs(
+    pedidoItems
+      .filter((item) => item.subtotal < 0)
+      .reduce((acc, item) => acc + item.subtotal, 0)
+  );
+  const detalleDescuento = pedidoItems.find((item) => item.subtotal < 0)?.comentario;
   const totalPendiente = itemsPendientes.reduce((acc, item) => {
     const totalItem = parsePrecioInput(item.totalInput);
     return acc + (totalItem ?? 0);
@@ -248,6 +271,34 @@ export function PedidoDetallePanel({
     }
   };
 
+  const aplicarDescuento = async () => {
+    if (!onAplicarDescuento) return;
+
+    const valor = parsePrecioInput(valorDescuento);
+
+    if (valor === null) {
+      setErrorDescuento("Ingresa un descuento mayor a cero.");
+      return;
+    }
+
+    if (tipoDescuento === "porcentaje" && valor > 100) {
+      setErrorDescuento("El porcentaje no puede superar el 100%.");
+      return;
+    }
+
+    try {
+      setAplicandoDescuento(true);
+      setErrorDescuento(null);
+      await onAplicarDescuento({ tipo: tipoDescuento, valor });
+      setMostrandoDescuento(false);
+      setValorDescuento("");
+    } catch (err) {
+      setErrorDescuento(err instanceof Error ? err.message : "No se pudo aplicar el descuento.");
+    } finally {
+      setAplicandoDescuento(false);
+    }
+  };
+
   return (
     <aside
       className={`flex min-h-[520px] w-full flex-col overflow-y-auto rounded-lg border bg-card shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-12rem)] ${widthClassName}`}
@@ -263,7 +314,7 @@ export function PedidoDetallePanel({
             {infoSlot}
 
             <div>
-              <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3>
+              {/* <h3 className="mb-2 text-sm font-semibold">Agregar productos</h3> */}
 
               {error && (
                 <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
@@ -273,9 +324,9 @@ export function PedidoDetallePanel({
 
               {productosFavoritos.length > 0 && (
                 <div className="mb-3">
-                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  {/* <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                     Favoritos
-                  </p>
+                  </p> */}
                   <div className="flex flex-wrap gap-2">
                     {productosFavoritos.map((producto) => (
                       <Button
@@ -378,6 +429,7 @@ export function PedidoDetallePanel({
               {pedidoItems.length > 0 ? (
                 pedidoItems.map((item) => {
                   const actualizandoEsteItem = itemActualizandoId === item.id;
+                  const esDescuento = item.subtotal < 0;
 
                   return (
                     <div
@@ -387,8 +439,9 @@ export function PedidoDetallePanel({
                       <div className="min-w-0">
                         <p className="truncate font-medium">{item.nombreProducto}</p>
                         <p className="text-xs text-muted-foreground">
-                          ${item.precioUnitario.toLocaleString()} c/u - $
-                          {item.subtotal.toLocaleString()}
+                          {esDescuento
+                            ? `-$${Math.abs(item.subtotal).toLocaleString()}`
+                            : `$${item.precioUnitario.toLocaleString()} c/u - $${item.subtotal.toLocaleString()}`}
                         </p>
                         {item.comentario && (
                           <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -397,29 +450,33 @@ export function PedidoDetallePanel({
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          disabled={actualizandoEsteItem || item.cantidad <= 1}
-                          size="icon"
-                          title="Restar unidad"
-                          type="button"
-                          variant="outline"
-                          onClick={() => cambiarCantidadItem(item, item.cantidad - 1)}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <span className="grid h-8 min-w-8 place-items-center rounded-md border px-2 font-semibold">
-                          {item.cantidad}
-                        </span>
-                        <Button
-                          disabled={actualizandoEsteItem}
-                          size="icon"
-                          title="Sumar unidad"
-                          type="button"
-                          variant="outline"
-                          onClick={() => cambiarCantidadItem(item, item.cantidad + 1)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        {!esDescuento && (
+                          <>
+                            <Button
+                              disabled={actualizandoEsteItem || item.cantidad <= 1}
+                              size="icon"
+                              title="Restar unidad"
+                              type="button"
+                              variant="outline"
+                              onClick={() => cambiarCantidadItem(item, item.cantidad - 1)}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="grid h-8 min-w-8 place-items-center rounded-md border px-2 font-semibold">
+                              {item.cantidad}
+                            </span>
+                            <Button
+                              disabled={actualizandoEsteItem}
+                              size="icon"
+                              title="Sumar unidad"
+                              type="button"
+                              variant="outline"
+                              onClick={() => cambiarCantidadItem(item, item.cantidad + 1)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button
                           disabled={actualizandoEsteItem}
                           size="icon"
@@ -553,13 +610,112 @@ export function PedidoDetallePanel({
           </div>
 
           <div className="p-4">
-            <div className="mb-3 flex items-center justify-between gap-4 rounded-md bg-muted px-3 py-2">
-              <span className="text-sm font-medium text-muted-foreground">Total</span>
-              <span className="text-xl font-bold text-foreground">${total.toLocaleString()}</span>
+            {mostrandoDescuento && onAplicarDescuento && (
+              <div className="mb-3 rounded-md border bg-muted/40 p-3">
+                <div className="mb-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant={tipoDescuento === "monto" ? "default" : "secondary"}
+                    onClick={() => {
+                      setTipoDescuento("monto");
+                      setErrorDescuento(null);
+                    }}
+                  >
+                    $ Monto fijo
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant={tipoDescuento === "porcentaje" ? "default" : "secondary"}
+                    onClick={() => {
+                      setTipoDescuento("porcentaje");
+                      setErrorDescuento(null);
+                    }}
+                  >
+                    <Percent className="h-4 w-4" />
+                    Porcentaje
+                  </Button>
+                </div>
+                <label className="block text-sm font-medium">
+                  {tipoDescuento === "monto" ? "Monto de descuento" : "Porcentaje de descuento"}
+                  <div className="relative mt-1">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {tipoDescuento === "monto" ? "$" : "%"}
+                    </span>
+                    <Input
+                      className="pl-8"
+                      inputMode="decimal"
+                      placeholder={tipoDescuento === "monto" ? "Ej: 1500" : "Ej: 10"}
+                      value={valorDescuento}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        if (!esPrecioInput(value)) return;
+                        setValorDescuento(value);
+                        setErrorDescuento(null);
+                      }}
+                    />
+                  </div>
+                </label>
+                {errorDescuento && (
+                  <p className="mt-2 text-sm text-destructive">{errorDescuento}</p>
+                )}
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button
+                    disabled={aplicandoDescuento}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setMostrandoDescuento(false);
+                      setValorDescuento("");
+                      setErrorDescuento(null);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    disabled={aplicandoDescuento}
+                    size="sm"
+                    type="button"
+                    onClick={aplicarDescuento}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-3 space-y-2 rounded-md bg-muted px-3 py-2">
+              {descuentoAplicado > 0 && (
+                <>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-semibold">${subtotalSinDescuento.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-sm text-emerald-700">
+                    <span>Descuento aplicado</span>
+                    <span className="font-semibold">-${descuentoAplicado.toLocaleString()}</span>
+                  </div>
+                  {detalleDescuento && (
+                    <p className="text-xs text-muted-foreground">{detalleDescuento}</p>
+                  )}
+                </>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm font-medium text-muted-foreground">Total</span>
+                <span className="text-xl font-bold text-foreground">${total.toLocaleString()}</span>
+              </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {onAplicarDescuento && (
-                <Button variant="secondary" onClick={onAplicarDescuento}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setMostrandoDescuento((prev) => !prev);
+                    setErrorDescuento(null);
+                  }}
+                >
                   Aplicar Descuento
                 </Button>
               )}

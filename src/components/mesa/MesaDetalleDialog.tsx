@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PedidoDetallePanel } from "@/components/pedidos/PedidoDetallePanel";
 import type { Mesa, Pedido, PedidoItem } from "@/lib/types";
-import type { PagoPedidoInput, ProductoPendientePedido } from "@/services/pedidosService";
+import type {
+  DescuentoPedidoInput,
+  PagoPedidoInput,
+  ProductoPendientePedido,
+} from "@/services/pedidosService";
 
 type Props = {
   mesa: Mesa | null;
@@ -17,7 +21,7 @@ type Props = {
   onOcuparMesa: (personas: number) => Promise<void> | void;
   onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
-  onAplicarDescuento: () => void;
+  onAplicarDescuento: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };
 
 export function MesaDetalleDialog({
