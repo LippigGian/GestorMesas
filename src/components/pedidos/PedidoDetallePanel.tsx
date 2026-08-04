@@ -136,7 +136,8 @@ export function PedidoDetallePanel({
       .filter((item) => item.subtotal < 0)
       .reduce((acc, item) => acc + item.subtotal, 0)
   );
-  const detalleDescuento = pedidoItems.find((item) => item.subtotal < 0)?.comentario;
+  const itemDescuento = pedidoItems.find((item) => item.subtotal < 0);
+  const detalleDescuento = itemDescuento?.comentario;
   const totalPendiente = itemsPendientes.reduce((acc, item) => {
     const totalItem = parsePrecioInput(item.totalInput);
     return acc + (totalItem ?? 0);
@@ -266,6 +267,18 @@ export function PedidoDetallePanel({
     try {
       setItemActualizandoId(item.id);
       await onEliminarItem(item.id);
+    } finally {
+      setItemActualizandoId(null);
+    }
+  };
+
+  const anularDescuento = async () => {
+    if (!itemDescuento) return;
+    if (!window.confirm("Anular el descuento aplicado?")) return;
+
+    try {
+      setItemActualizandoId(itemDescuento.id);
+      await onEliminarItem(itemDescuento.id);
     } finally {
       setItemActualizandoId(null);
     }
@@ -700,6 +713,17 @@ export function PedidoDetallePanel({
                   {detalleDescuento && (
                     <p className="text-xs text-muted-foreground">{detalleDescuento}</p>
                   )}
+                  <div className="flex justify-end">
+                    <Button
+                      disabled={itemActualizandoId === itemDescuento?.id}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={anularDescuento}
+                    >
+                      Anular descuento
+                    </Button>
+                  </div>
                 </>
               )}
               <div className="flex items-center justify-between gap-4">
