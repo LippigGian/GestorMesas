@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { MedioPago, PedidoItem } from "@/lib/types";
+import { useLocal } from "@/context/LocalContext";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
 import {
   obtenerTotalPagadoPedido,
@@ -63,6 +64,7 @@ export function CerrarPedidoDialog({
   onCobroParcial,
   onConfirmar,
 }: Props) {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [pagos, setPagos] = useState<PagoForm[]>([]);
   const [totalPagadoPrevio, setTotalPagadoPrevio] = useState(0);
@@ -84,6 +86,16 @@ export function CerrarPedidoDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setMediosPago([]);
+      setPagos([]);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
 
     let mounted = true;
 
@@ -92,7 +104,7 @@ export function CerrarPedidoDialog({
         setCargando(true);
         setError(null);
         setCobroParcial(false);
-        const medios = await obtenerMediosPago();
+        const medios = await obtenerMediosPago(localIdActual);
         const pagado = await obtenerTotalPagadoPedido(pedidoId);
 
         if (!mounted) return;
@@ -123,7 +135,7 @@ export function CerrarPedidoDialog({
     return () => {
       mounted = false;
     };
-  }, [open, pedidoId, total]);
+  }, [cargandoLocal, errorLocal, localId, open, pedidoId, total]);
 
   const actualizarPago = (pagoId: string, patch: Partial<Omit<PagoForm, "id">>) => {
     setPagos((prev) =>

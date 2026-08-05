@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 type PedidoRow = {
   id: string;
+  local_id?: string | null;
   tipo: "mesa" | "mostrador";
   mesa_id: string | null;
   estado: "abierto" | "cerrado" | "cancelado";
@@ -72,10 +73,11 @@ async function recalcularTotalPedido(pedidoId: string): Promise<number> {
   return total;
 }
 
-async function obtenerArqueoAbiertoParaVenta() {
+async function obtenerArqueoAbiertoParaVenta(localId: string) {
   const { data, error } = await supabase
     .from("arqueos_caja")
     .select("id")
+    .eq("local_id", localId)
     .eq("estado", "abierto");
 
   if (error) {
@@ -105,11 +107,12 @@ function horaEnTurno(hora: string, inicio: string, fin: string) {
   return horaNormalizada >= inicioNormalizado || horaNormalizada < finNormalizado;
 }
 
-async function obtenerTurnoParaFecha(fecha: Date): Promise<string | null> {
+async function obtenerTurnoParaFecha(fecha: Date, localId: string): Promise<string | null> {
   const hora = fecha.toTimeString().slice(0, 5);
   const { data, error } = await supabase
     .from("turnos")
     .select("id, hora_inicio, hora_fin")
+    .eq("local_id", localId)
     .eq("activo", true);
 
   if (error) {
@@ -161,7 +164,11 @@ export async function obtenerPedidoAbiertoPorMesa(mesaId: string): Promise<Pedid
   return data ? mapPedido(data) : null;
 }
 
-export async function crearPedidoMesa(mesaId: string, personas: number): Promise<Pedido> {
+export async function crearPedidoMesa(
+  mesaId: string,
+  personas: number,
+  localId: string
+): Promise<Pedido> {
   const existente = await obtenerPedidoAbiertoPorMesa(mesaId);
   if (existente) {
     return existente;
@@ -171,6 +178,7 @@ export async function crearPedidoMesa(mesaId: string, personas: number): Promise
     .from("pedidos")
     .insert({
       tipo: "mesa",
+      local_id: localId,
       mesa_id: mesaId,
       estado: "abierto",
       personas,
@@ -194,13 +202,19 @@ export async function crearPedidoMesa(mesaId: string, personas: number): Promise
   return mapPedido(data);
 }
 
-export async function obtenerPedidosMostradorAbiertos(): Promise<Pedido[]> {
-  const { data, error } = await supabase
+export async function obtenerPedidosMostradorAbiertos(localId?: string): Promise<Pedido[]> {
+  let query = supabase
     .from("pedidos")
-    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .select("id, local_id, tipo, mesa_id, estado, personas, cliente, total, created_at")
     .eq("tipo", "mostrador")
     .eq("estado", "abierto")
     .order("created_at", { ascending: false });
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -209,17 +223,18 @@ export async function obtenerPedidosMostradorAbiertos(): Promise<Pedido[]> {
   return (data ?? []).map(mapPedido);
 }
 
-export async function crearPedidoMostrador(cliente?: string): Promise<Pedido> {
+export async function crearPedidoMostrador(localId: string, cliente?: string): Promise<Pedido> {
   const { data, error } = await supabase
     .from("pedidos")
     .insert({
       tipo: "mostrador",
+      local_id: localId,
       estado: "abierto",
       cliente: cliente?.trim() || null,
       personas: 0,
       total: 0,
     })
-    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .select("id, local_id, tipo, mesa_id, estado, personas, cliente, total, created_at")
     .single();
 
   if (error) {
@@ -354,10 +369,10 @@ function validarPagosPedido(pagos: PagoPedidoInput[]) {
   }
 }
 
-async function obtenerArqueoPedidoParaPago(pedidoId: string) {
+async function obtenerArqueoPedidoParaPago(pedidoId: string, localId: string) {
   const { data: pedido, error: pedidoError } = await supabase
     .from("pedidos")
-    .select("arqueo_caja_id")
+    .select("arqueo_caja_id, local_id")
     .eq("id", pedidoId)
     .single();
 
@@ -365,11 +380,15 @@ async function obtenerArqueoPedidoParaPago(pedidoId: string) {
     throw new Error(pedidoError.message);
   }
 
-  const arqueoCajaId = await obtenerArqueoAbiertoParaVenta();
+  if (pedido.local_id && pedido.local_id !== localId) {
+    throw new Error("El pedido no pertenece al local activo.");
+  }
+
+  const arqueoCajaId = await obtenerArqueoAbiertoParaVenta(localId);
 
   const { data: arqueo, error: arqueoError } = await supabase
     .from("arqueos_caja")
-    .select("estado")
+    .select("estado, local_id")
     .eq("id", arqueoCajaId)
     .single();
 
@@ -379,6 +398,10 @@ async function obtenerArqueoPedidoParaPago(pedidoId: string) {
 
   if (arqueo.estado !== "abierto") {
     throw new Error("No se pueden registrar pagos en un arqueo cerrado.");
+  }
+
+  if (arqueo.local_id !== localId) {
+    throw new Error("El arqueo abierto no pertenece al local activo.");
   }
 
   if (!pedido.arqueo_caja_id) {
@@ -416,7 +439,8 @@ async function insertarPagosPedido(
 
 export async function registrarPagoParcialPedido(
   pedidoId: string,
-  pagos: PagoPedidoInput[]
+  pagos: PagoPedidoInput[],
+  localId: string
 ): Promise<number> {
   validarPagosPedido(pagos);
   const total = await recalcularTotalPedido(pedidoId);
@@ -427,7 +451,7 @@ export async function registrarPagoParcialPedido(
     throw new Error("Para cobrar el total usa Cerrar venta.");
   }
 
-  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId);
+  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId, localId);
   await insertarPagosPedido(pedidoId, pagos, arqueoCajaId);
   await recalcularTotalArqueo(arqueoCajaId);
 
@@ -604,11 +628,15 @@ export async function eliminarItemPedido(
   return obtenerItemsPedido(pedidoId);
 }
 
-export async function cerrarPedido(pedidoId: string, pagos: PagoPedidoInput[] = []): Promise<void> {
+export async function cerrarPedido(
+  pedidoId: string,
+  pagos: PagoPedidoInput[],
+  localId: string
+): Promise<void> {
   const total = await recalcularTotalPedido(pedidoId);
-  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId);
+  const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId, localId);
   const closedAt = new Date();
-  const turnoId = await obtenerTurnoParaFecha(closedAt);
+  const turnoId = await obtenerTurnoParaFecha(closedAt, localId);
   const pagadoActual = await obtenerTotalPagadoPedido(pedidoId);
   const totalPagosNuevos = pagos.reduce((acc, pago) => acc + pago.monto, 0);
   const totalPagos = pagadoActual + totalPagosNuevos;

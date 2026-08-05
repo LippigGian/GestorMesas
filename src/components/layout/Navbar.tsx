@@ -13,6 +13,8 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useSector } from "@/context/SectorContext";
+import { useAuth } from "@/context/AuthContext";
+import { useLocal } from "@/context/LocalContext";
 
 type NavbarProps = {
   modoEdicion: boolean;
@@ -22,6 +24,8 @@ type NavbarProps = {
 export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   const location = useLocation();
   const { sectorActual, setSectorActual } = useSector();
+  const { cerrarSesion, user } = useAuth();
+  const { local } = useLocal();
 
   const navButtonClass =
     "text-primary-foreground hover:bg-white/10 hover:text-primary-foreground data-[active=true]:text-secondary-foreground";
@@ -81,8 +85,8 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Estacion de cafe</span>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
+          <span className="text-sm font-medium">{local?.nombre ?? user?.email ?? "Gestor Mesas"}</span>
+          <Button variant="ghost" size="icon" className={navButtonClass} onClick={() => void cerrarSesion()}>
             <LogOut className="h-5 w-5" />
           </Button>
         </div>

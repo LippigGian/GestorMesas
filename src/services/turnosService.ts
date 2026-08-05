@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 type TurnoRow = {
   id: string;
+  local_id: string | null;
   nombre: string;
   hora_inicio: string;
   hora_fin: string;
@@ -12,6 +13,7 @@ type TurnoRow = {
 function mapTurno(row: TurnoRow): Turno {
   return {
     id: row.id,
+    localId: row.local_id ?? undefined,
     nombre: row.nombre,
     horaInicio: row.hora_inicio.slice(0, 5),
     horaFin: row.hora_fin.slice(0, 5),
@@ -27,11 +29,17 @@ export function normalizarNombreTurno(nombre: string) {
     .toLocaleLowerCase();
 }
 
-export async function obtenerTurnos(): Promise<Turno[]> {
-  const { data, error } = await supabase
+export async function obtenerTurnos(localId?: string): Promise<Turno[]> {
+  let query = supabase
     .from("turnos")
-    .select("id, nombre, hora_inicio, hora_fin, activo")
+    .select("id, local_id, nombre, hora_inicio, hora_fin, activo")
     .order("hora_inicio");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -41,6 +49,7 @@ export async function obtenerTurnos(): Promise<Turno[]> {
 }
 
 export async function crearTurno(input: {
+  localId: string;
   nombre: string;
   horaInicio: string;
   horaFin: string;
@@ -54,12 +63,13 @@ export async function crearTurno(input: {
   const { data, error } = await supabase
     .from("turnos")
     .insert({
+      local_id: input.localId,
       nombre,
       hora_inicio: input.horaInicio,
       hora_fin: input.horaFin,
       activo: true,
     })
-    .select("id, nombre, hora_inicio, hora_fin, activo")
+    .select("id, local_id, nombre, hora_inicio, hora_fin, activo")
     .single();
 
   if (error) {
@@ -94,7 +104,7 @@ export async function actualizarTurno(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.turnoId)
-    .select("id, nombre, hora_inicio, hora_fin, activo")
+    .select("id, local_id, nombre, hora_inicio, hora_fin, activo")
     .single();
 
   if (error) {

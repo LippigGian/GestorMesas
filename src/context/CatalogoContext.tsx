@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Categoria, Producto } from "@/lib/types";
 import { obtenerCategorias, obtenerProductos } from "@/services/productosService";
+import { useLocal } from "@/context/LocalContext";
 
 type CatalogoContextValue = {
   categorias: Categoria[];
@@ -14,6 +15,7 @@ type CatalogoContextValue = {
 const CatalogoContext = createContext<CatalogoContextValue | undefined>(undefined);
 
 export function CatalogoProvider({ children }: { children: React.ReactNode }) {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -25,13 +27,23 @@ export function CatalogoProvider({ children }: { children: React.ReactNode }) {
   );
 
   const recargarCatalogo = async () => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setCategorias([]);
+      setProductos([]);
+      setCargando(false);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
     try {
       setCargando(true);
       setError(null);
 
       const [categoriasDb, productosDb] = await Promise.all([
-        obtenerCategorias(),
-        obtenerProductos(),
+        obtenerCategorias(localId),
+        obtenerProductos(localId),
       ]);
 
       setCategorias(categoriasDb);
@@ -45,7 +57,7 @@ export function CatalogoProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     recargarCatalogo();
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   return (
     <CatalogoContext.Provider

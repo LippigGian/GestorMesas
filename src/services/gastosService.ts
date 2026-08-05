@@ -2,6 +2,7 @@ import type { Gasto } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
 export type GastoInput = {
+  localId: string;
   fecha: string;
   importe: number;
   proveedorId: string;
@@ -11,12 +12,14 @@ export type GastoInput = {
 };
 
 export type ObtenerGastosFiltros = {
+  localId?: string;
   fechaDesde?: string;
   fechaHasta?: string;
 };
 
 type GastoRow = {
   id: string;
+  local_id: string | null;
   arqueo_caja_id: string;
   medio_pago_id: string;
   proveedor_id: string | null;
@@ -42,6 +45,7 @@ function mapGasto(row: GastoRow): Gasto {
 
   return {
     id: row.id,
+    localId: row.local_id ?? undefined,
     arqueoCajaId: row.arqueo_caja_id,
     arqueoCajaEstado: arqueo?.estado,
     medioPagoId: row.medio_pago_id,
@@ -57,7 +61,7 @@ function mapGasto(row: GastoRow): Gasto {
 }
 
 const selectGasto =
-  "id, arqueo_caja_id, medio_pago_id, proveedor_id, fecha, importe, proveedor, categoria, comentario, created_at, medios_pago(nombre), proveedores(nombre), arqueos_caja(estado)";
+  "id, local_id, arqueo_caja_id, medio_pago_id, proveedor_id, fecha, importe, proveedor, categoria, comentario, created_at, medios_pago(nombre), proveedores(nombre), arqueos_caja(estado)";
 
 function validarInputGasto(input: GastoInput) {
   if (!input.medioPagoId) {
@@ -77,10 +81,11 @@ function validarInputGasto(input: GastoInput) {
   }
 }
 
-async function obtenerArqueoAbiertoId() {
+async function obtenerArqueoAbiertoId(localId: string) {
   const { data, error } = await supabase
     .from("arqueos_caja")
     .select("id")
+    .eq("local_id", localId)
     .eq("estado", "abierto");
 
   if (error) {
@@ -120,6 +125,10 @@ export async function obtenerGastos(filtros: ObtenerGastosFiltros = {}): Promise
     .select(selectGasto)
     .order("fecha", { ascending: false });
 
+  if (filtros.localId) {
+    query = query.eq("local_id", filtros.localId);
+  }
+
   if (filtros.fechaDesde) {
     query = query.gte("fecha", new Date(`${filtros.fechaDesde}T00:00:00`).toISOString());
   }
@@ -141,11 +150,12 @@ export async function obtenerGastos(filtros: ObtenerGastosFiltros = {}): Promise
 
 export async function crearGasto(input: GastoInput): Promise<Gasto> {
   validarInputGasto(input);
-  const arqueoCajaId = await obtenerArqueoAbiertoId();
+  const arqueoCajaId = await obtenerArqueoAbiertoId(input.localId);
 
   const { data, error } = await supabase
     .from("gastos")
     .insert({
+      local_id: input.localId,
       arqueo_caja_id: arqueoCajaId,
       medio_pago_id: input.medioPagoId,
       proveedor_id: input.proveedorId,

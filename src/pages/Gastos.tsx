@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLocal } from "@/context/LocalContext";
 import type { Gasto, MedioPago, Proveedor } from "@/lib/types";
 import {
   actualizarGasto,
@@ -119,6 +120,7 @@ function gastoDentroDeFechas(gasto: Gasto, fechaDesde: string, fechaHasta: strin
 }
 
 export function Gastos() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -137,12 +139,20 @@ export function Gastos() {
   );
 
   const cargarDatos = async () => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setMediosPago([]);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
     try {
       setCargando(true);
       setError(null);
       const [gastosDb, mediosDb, proveedoresDb] = await Promise.all([
-        obtenerGastos({ fechaDesde, fechaHasta }),
-        obtenerMediosPago(),
+        obtenerGastos({ localId, fechaDesde, fechaHasta }),
+        obtenerMediosPago(localId),
         obtenerProveedores(),
       ]);
       setGastos(gastosDb);
@@ -166,7 +176,7 @@ export function Gastos() {
   useEffect(() => {
     cargarDatos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fechaDesde, fechaHasta]);
+  }, [cargandoLocal, errorLocal, fechaDesde, fechaHasta, localId]);
 
   const abrirNuevo = () => {
     setError(null);
@@ -192,6 +202,10 @@ export function Gastos() {
   };
 
   const buildInput = (): GastoInput => {
+    if (!localId) {
+      throw new Error("No hay un local activo configurado.");
+    }
+
     if (!form.fecha || Number.isNaN(new Date(form.fecha).getTime())) {
       throw new Error("Selecciona una fecha valida.");
     }
@@ -205,6 +219,7 @@ export function Gastos() {
     }
 
     return {
+      localId,
       fecha: form.fecha,
       importe: parseImporte(form.importe),
       proveedorId: form.proveedorId,

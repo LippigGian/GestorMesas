@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 export type SectorMesa = "salon" | "deck";
 
 export type MesaConPosicion = Mesa & {
+  localId: string;
   sector: SectorMesa;
   x: number;
   y: number;
@@ -11,6 +12,7 @@ export type MesaConPosicion = Mesa & {
 
 type MesaRow = {
   id: string;
+  local_id: string;
   numero: string;
   tipo: "cuadrada" | "redonda";
   estado: "libre" | "ocupada";
@@ -23,6 +25,7 @@ type MesaRow = {
 function mapMesa(row: MesaRow): MesaConPosicion {
   return {
     id: row.id,
+    localId: row.local_id,
     numero: row.numero,
     tipo: row.tipo,
     estado: row.estado,
@@ -34,12 +37,18 @@ function mapMesa(row: MesaRow): MesaConPosicion {
   };
 }
 
-export async function obtenerMesas(): Promise<MesaConPosicion[]> {
-  const { data, error } = await supabase
+export async function obtenerMesas(localId?: string): Promise<MesaConPosicion[]> {
+  let query = supabase
     .from("mesas")
-    .select("id, numero, tipo, estado, personas, sector, x, y")
+    .select("id, local_id, numero, tipo, estado, personas, sector, x, y")
     .order("sector")
     .order("numero");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -54,6 +63,7 @@ export async function guardarMesa(mesa: MesaConPosicion): Promise<MesaConPosicio
     .upsert(
       {
         id: mesa.id,
+        local_id: mesa.localId,
         numero: mesa.numero,
         tipo: mesa.tipo,
         estado: mesa.estado ?? "libre",
@@ -65,7 +75,7 @@ export async function guardarMesa(mesa: MesaConPosicion): Promise<MesaConPosicio
       },
       { onConflict: "id" }
     )
-    .select("id, numero, tipo, estado, personas, sector, x, y")
+    .select("id, local_id, numero, tipo, estado, personas, sector, x, y")
     .single();
 
   if (error) {

@@ -3,6 +3,7 @@ import { ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PedidoDetallePanel } from '@/components/pedidos/PedidoDetallePanel';
+import { useLocal } from '@/context/LocalContext';
 import type { Pedido, PedidoItem } from '@/lib/types';
 import {
   actualizarCantidadItemPedido,
@@ -37,6 +38,7 @@ function crearTituloPedido(pedido: Pedido) {
 }
 
 export function Mostrador() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
   const [pedidoItems, setPedidoItems] = useState<PedidoItem[]>([]);
@@ -47,13 +49,23 @@ export function Mostrador() {
   const [errorMostrador, setErrorMostrador] = useState<string | null>(null);
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setPedidos([]);
+      setCargandoPedidos(false);
+      setErrorMostrador(errorLocal ?? 'No hay un local activo configurado.');
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarPedidos() {
       try {
         setCargandoPedidos(true);
         setErrorMostrador(null);
-        const abiertos = await obtenerPedidosMostradorAbiertos();
+        const abiertos = await obtenerPedidosMostradorAbiertos(localIdActual);
 
         if (!mounted) return;
 
@@ -76,7 +88,7 @@ export function Mostrador() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   const actualizarPedidoSeleccionado = (pedido: Pedido) => {
     setPedidoSeleccionado(pedido);
@@ -113,10 +125,15 @@ export function Mostrador() {
   };
 
   const crearNuevoPedido = async () => {
+    if (!localId) {
+      setErrorMostrador('No hay un local activo configurado.');
+      return;
+    }
+
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      const pedido = await crearPedidoMostrador();
+      const pedido = await crearPedidoMostrador(localId);
       setPedidos((prev) => [pedido, ...prev]);
       setPedidoSeleccionado(pedido);
       setPedidoItems([]);
@@ -190,10 +207,15 @@ export function Mostrador() {
       return;
     }
 
+    if (!localId) {
+      setErrorMostrador('No hay un local activo configurado.');
+      return;
+    }
+
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await cerrarPedido(pedidoSeleccionado.id, pagos);
+      await cerrarPedido(pedidoSeleccionado.id, pagos, localId);
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
       setPedidoSeleccionado(null);
       setPedidoItems([]);
@@ -211,10 +233,15 @@ export function Mostrador() {
       return;
     }
 
+    if (!localId) {
+      setErrorMostrador('No hay un local activo configurado.');
+      return;
+    }
+
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos);
+      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos, localId);
     } catch (err) {
       setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;

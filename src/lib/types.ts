@@ -19,6 +19,22 @@ export type Celda = {
   mesa?: Mesa;
 };
 
+export type Local = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+};
+
+export type RolUsuarioLocal = 'admin' | 'encargado' | 'mozo';
+
+export type UsuarioLocal = {
+  id: string;
+  usuarioId: string;
+  localId: string;
+  rol: RolUsuarioLocal;
+  activo: boolean;
+};
+
 export type Pedido = {
   id: string;
   horaInicio?: string;
@@ -43,6 +59,7 @@ export type PedidoItem = {
 
 export type MedioPago = {
   id: string;
+  localId?: string;
   nombre: string;
   activo: boolean;
 };
@@ -55,12 +72,14 @@ export type Proveedor = {
 
 export type Caja = {
   id: string;
+  localId?: string;
   nombre: string;
   activo: boolean;
 };
 
 export type ArqueoCaja = {
   id: string;
+  localId?: string;
   cajaId: string;
   cajaNombre?: string;
   estado: 'abierto' | 'cerrado' | 'cancelado';
@@ -84,6 +103,7 @@ export type ArqueoCajaMedioPago = {
 
 export type Turno = {
   id: string;
+  localId?: string;
   nombre: string;
   horaInicio: string;
   horaFin: string;
@@ -92,6 +112,7 @@ export type Turno = {
 
 export type Gasto = {
   id: string;
+  localId?: string;
   fecha: string;
   importe: number;
   proveedorId?: string;
@@ -107,11 +128,13 @@ export type Gasto = {
 
 export type Categoria = {
   id: string;
+  localId?: string;
   nombre: string;
 };
 
 export type Producto = {
   id: string;
+  localId?: string;
   nombre: string;
   precio: number;
   categoriaId: string;

@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 type ArqueoCajaRow = {
   id: string;
+  local_id: string | null;
   caja_id: string;
   estado: "abierto" | "cerrado" | "cancelado";
   monto_inicial: number;
@@ -29,6 +30,7 @@ function mapArqueo(row: ArqueoCajaRow): ArqueoCaja {
 
   return {
     id: row.id,
+    localId: row.local_id ?? undefined,
     cajaId: row.caja_id,
     cajaNombre: caja?.nombre,
     estado: row.estado,
@@ -43,7 +45,7 @@ function mapArqueo(row: ArqueoCajaRow): ArqueoCaja {
 }
 
 const selectArqueo =
-  "id, caja_id, estado, monto_inicial, monto_final_declarado, total_ventas, diferencia, opened_at, closed_at, cajas(nombre)";
+  "id, local_id, caja_id, estado, monto_inicial, monto_final_declarado, total_ventas, diferencia, opened_at, closed_at, cajas(nombre)";
 
 function mapArqueoMedioPago(row: ArqueoCajaMedioPagoRow): ArqueoCajaMedioPago {
   const medio = Array.isArray(row.medios_pago) ? row.medios_pago[0] : row.medios_pago;
@@ -59,11 +61,17 @@ function mapArqueoMedioPago(row: ArqueoCajaMedioPagoRow): ArqueoCajaMedioPago {
   };
 }
 
-export async function obtenerArqueosCaja(): Promise<ArqueoCaja[]> {
-  const { data, error } = await supabase
+export async function obtenerArqueosCaja(localId?: string): Promise<ArqueoCaja[]> {
+  let query = supabase
     .from("arqueos_caja")
     .select(selectArqueo)
     .order("opened_at", { ascending: false });
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -107,6 +115,7 @@ async function obtenerMontosSistemaPorMedio(arqueoId: string) {
 }
 
 export async function crearArqueoCaja(input: {
+  localId: string;
   cajaId: string;
   montoInicial: number;
   openedAt: string;
@@ -128,6 +137,7 @@ export async function crearArqueoCaja(input: {
   const { data, error } = await supabase
     .from("arqueos_caja")
     .insert({
+      local_id: input.localId,
       caja_id: input.cajaId,
       estado: "abierto",
       monto_inicial: input.montoInicial,
@@ -229,14 +239,21 @@ export async function obtenerDetalleMediosPagoArqueo(
 }
 
 export async function obtenerMontosSistemaMediosPagoArqueo(
-  arqueoId: string
+  arqueoId: string,
+  localId?: string
 ): Promise<ArqueoCajaMedioPago[]> {
   const montosSistema = await obtenerMontosSistemaPorMedio(arqueoId);
-  const { data, error } = await supabase
+  let query = supabase
     .from("medios_pago")
     .select("id, nombre")
     .eq("activo", true)
     .order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);

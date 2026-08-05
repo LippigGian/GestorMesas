@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLocal } from "@/context/LocalContext";
 import type { Caja } from "@/lib/types";
 import {
   activarCaja,
@@ -13,6 +14,7 @@ import {
 } from "@/services/cajasService";
 
 export function ConfiguracionCajas() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [cajas, setCajas] = useState<Caja[]>([]);
   const [nombreCaja, setNombreCaja] = useState("");
   const [cajaEditando, setCajaEditando] = useState<Caja | null>(null);
@@ -21,13 +23,23 @@ export function ConfiguracionCajas() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setCajas([]);
+      setCargando(false);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarCajas() {
       try {
         setCargando(true);
         setError(null);
-        const cajasDb = await obtenerCajas();
+        const cajasDb = await obtenerCajas(localIdActual);
 
         if (mounted) {
           setCajas(cajasDb);
@@ -48,7 +60,7 @@ export function ConfiguracionCajas() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   const limpiarFormulario = () => {
     setCajaEditando(null);
@@ -56,6 +68,11 @@ export function ConfiguracionCajas() {
   };
 
   const guardarCaja = async () => {
+    if (!localId) {
+      setError("No hay un local activo configurado.");
+      return;
+    }
+
     const nombreNormalizado = normalizarNombreCaja(nombreCaja);
 
     if (!nombreNormalizado) {
@@ -78,7 +95,7 @@ export function ConfiguracionCajas() {
       setError(null);
       const cajaGuardada = cajaEditando
         ? await actualizarCaja(cajaEditando.id, nombreCaja)
-        : await crearCaja(nombreCaja);
+        : await crearCaja(nombreCaja, localId);
 
       setCajas((prev) => {
         const existe = prev.some((caja) => caja.id === cajaGuardada.id);
