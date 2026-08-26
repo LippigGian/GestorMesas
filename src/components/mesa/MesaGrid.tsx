@@ -407,6 +407,8 @@ import {
   cerrarPedido,
   crearPedidoMesa,
   eliminarItemPedido,
+  juntarPedidosMesa,
+  moverPedidoAMesa,
   obtenerItemsPedido,
   obtenerPedidoAbiertoPorMesa,
   registrarPagoParcialPedido,
@@ -511,6 +513,10 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
   const celdas = celdasPorSector[sectorActual] || [];
   const dimensionesMinimas = obtenerDimensionesMinimas(celdasPorSector);
+  const mesasDisponibles = Object.values(celdasPorSector)
+    .flat()
+    .map((celda) => celda.mesa)
+    .filter((mesa): mesa is Mesa => Boolean(mesa));
 
   useEffect(() => {
     window.localStorage.setItem(GRID_ROWS_STORAGE_KEY, String(cantidadFilas));
@@ -590,6 +596,12 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     }));
   };
 
+  const refrescarPedidoMesaSeleccionada = async (mesa: Mesa) => {
+    const pedido = await obtenerPedidoAbiertoPorMesa(mesa.id);
+    setPedidoActivo(pedido);
+    setPedidoItems(pedido ? await obtenerItemsPedido(pedido.id) : []);
+  };
+
   const handleAbrirDialogo = (index: number) => {
     const mesa = celdas[index].mesa;
     setCeldaSeleccionada(index);
@@ -655,9 +667,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
     try {
       setErrorMesas(null);
-      const pedido = await obtenerPedidoAbiertoPorMesa(mesa.id);
-      setPedidoActivo(pedido);
-      setPedidoItems(pedido ? await obtenerItemsPedido(pedido.id) : []);
+      await refrescarPedidoMesaSeleccionada(mesa);
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
     }
@@ -748,6 +758,75 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
       actualizarMesaEnSectores(mesaActualizada);
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo actualizar la mesa');
+      throw err;
+    }
+  };
+
+  const moverMesa = async (mesaDestinoId: string) => {
+    if (!mesaSeleccionada || !pedidoActivo) return;
+
+    const mesaDestino = mesasDisponibles.find((mesa) => mesa.id === mesaDestinoId);
+    if (!mesaDestino) {
+      throw new Error('Selecciona una mesa valida.');
+    }
+
+    if (mesaDestino.id === mesaSeleccionada.id) {
+      throw new Error('Selecciona una mesa distinta.');
+    }
+
+    const mesaOrigenLibre: Mesa = {
+      ...mesaSeleccionada,
+      estado: 'libre',
+      personas: 0,
+      productos: [],
+    };
+
+    try {
+      setErrorMesas(null);
+
+      if (mesaDestino.estado === 'ocupada') {
+        const pedidoDestino = await obtenerPedidoAbiertoPorMesa(mesaDestino.id);
+
+        if (!pedidoDestino) {
+          throw new Error('La mesa destino figura ocupada pero no tiene pedido abierto.');
+        }
+
+        const personasDestino = (mesaDestino.personas ?? 0) + (mesaSeleccionada.personas ?? 0);
+        const pedidoActualizado = await juntarPedidosMesa(pedidoActivo.id, pedidoDestino.id);
+
+        await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+        await actualizarEstadoMesa(mesaDestino.id, 'ocupada', personasDestino);
+        await actualizarPersonasPedido(pedidoDestino.id, personasDestino);
+        const mesaDestinoActualizada: Mesa = {
+          ...mesaDestino,
+          estado: 'ocupada',
+          personas: personasDestino,
+        };
+
+        actualizarMesaEnSectores(mesaOrigenLibre);
+        actualizarMesaEnSectores(mesaDestinoActualizada);
+        setMesaSeleccionada(mesaDestinoActualizada);
+        setPedidoActivo({ ...pedidoActualizado, personas: personasDestino });
+        setPedidoItems(await obtenerItemsPedido(pedidoDestino.id));
+        return;
+      }
+
+      const pedidoActualizado = await moverPedidoAMesa(pedidoActivo.id, mesaDestino.id);
+      await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+      await actualizarEstadoMesa(mesaDestino.id, 'ocupada', mesaSeleccionada.personas ?? 0);
+
+      const mesaDestinoActualizada: Mesa = {
+        ...mesaDestino,
+        estado: 'ocupada',
+        personas: mesaSeleccionada.personas ?? 0,
+      };
+
+      actualizarMesaEnSectores(mesaOrigenLibre);
+      actualizarMesaEnSectores(mesaDestinoActualizada);
+      setMesaSeleccionada(mesaDestinoActualizada);
+      setPedidoActivo(pedidoActualizado);
+    } catch (err) {
+      setErrorMesas(err instanceof Error ? err.message : 'No se pudo mover la mesa');
       throw err;
     }
   };
@@ -1013,6 +1092,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
       <MesaDetalleDialog
         mesa={mesaActual}
+        mesasDisponibles={mesasDisponibles}
         pedido={pedidoActivo}
         pedidoItems={pedidoItems}
         onConfirmarProductos={confirmarProductosMesa}
@@ -1020,6 +1100,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
         onEliminarItem={eliminarPedidoItem}
         onActualizarPersonas={actualizarPersonasMesa}
         onOcuparMesa={ocuparMesa}
+        onMoverMesa={moverMesa}
         onCobroParcial={registrarCobroParcialMesa}
         onCerrarMesa={cerrarMesa}
         onAplicarDescuento={aplicarDescuento}

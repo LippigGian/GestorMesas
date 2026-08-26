@@ -12,6 +12,7 @@ import type {
 
 type Props = {
   mesa: Mesa | null;
+  mesasDisponibles?: Mesa[];
   pedido: Pedido | null;
   pedidoItems: PedidoItem[];
   onConfirmarProductos: (productos: ProductoPendientePedido[]) => Promise<void> | void;
@@ -19,6 +20,7 @@ type Props = {
   onEliminarItem: (itemId: string) => Promise<void> | void;
   onActualizarPersonas: (personas: number) => Promise<void> | void;
   onOcuparMesa: (personas: number) => Promise<void> | void;
+  onMoverMesa?: (mesaDestinoId: string) => Promise<void> | void;
   onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onAplicarDescuento: (descuento: DescuentoPedidoInput) => Promise<void> | void;
@@ -26,6 +28,7 @@ type Props = {
 
 export function MesaDetalleDialog({
   mesa,
+  mesasDisponibles = [],
   pedido,
   pedidoItems,
   onConfirmarProductos,
@@ -33,6 +36,7 @@ export function MesaDetalleDialog({
   onEliminarItem,
   onActualizarPersonas,
   onOcuparMesa,
+  onMoverMesa,
   onCobroParcial,
   onCerrarMesa,
   onAplicarDescuento,
@@ -44,6 +48,8 @@ export function MesaDetalleDialog({
   const [guardandoMesa, setGuardandoMesa] = useState(false);
   const [menuMesaAbierto, setMenuMesaAbierto] = useState(false);
   const [editandoMesa, setEditandoMesa] = useState(false);
+  const [moviendoMesa, setMoviendoMesa] = useState(false);
+  const [mesaDestinoId, setMesaDestinoId] = useState("");
   const [errorMesa, setErrorMesa] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +59,8 @@ export function MesaDetalleDialog({
     setGuardandoMesa(false);
     setMenuMesaAbierto(false);
     setEditandoMesa(false);
+    setMoviendoMesa(false);
+    setMesaDestinoId("");
     setErrorMesa(null);
   }, [mesa?.id, mesa?.personas]);
 
@@ -81,6 +89,15 @@ export function MesaDetalleDialog({
     setPersonasEditando(mesa?.personas ? String(mesa.personas) : "1");
     setErrorMesa(null);
     setEditandoMesa(true);
+    setMoviendoMesa(false);
+    setMenuMesaAbierto(false);
+  };
+
+  const iniciarMoverMesa = () => {
+    setErrorMesa(null);
+    setEditandoMesa(false);
+    setMoviendoMesa(true);
+    setMesaDestinoId("");
     setMenuMesaAbierto(false);
   };
 
@@ -103,6 +120,29 @@ export function MesaDetalleDialog({
       setGuardandoMesa(false);
     }
   };
+
+  const confirmarMoverMesa = async () => {
+    if (!mesaDestinoId || guardandoMesa || !onMoverMesa) {
+      return;
+    }
+
+    try {
+      setGuardandoMesa(true);
+      setErrorMesa(null);
+      await onMoverMesa(mesaDestinoId);
+      setMoviendoMesa(false);
+      setMesaDestinoId("");
+    } catch (err) {
+      setErrorMesa(err instanceof Error ? err.message : "No se pudo mover la mesa.");
+    } finally {
+      setGuardandoMesa(false);
+    }
+  };
+
+  const mesasDestino = mesasDisponibles
+    .filter((mesaDestino) => mesaDestino.id !== mesa?.id)
+    .sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true }));
+  const mesaDestino = mesasDestino.find((item) => item.id === mesaDestinoId);
 
   if (!mesa || mesa.estado === "ocupada") {
     return (
@@ -162,6 +202,60 @@ export function MesaDetalleDialog({
                   </div>
                 </div>
               )}
+
+              {moviendoMesa && (
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <label className="block text-sm font-medium">
+                    Mover a mesa
+                    <select
+                      className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={mesaDestinoId}
+                      onChange={(event) => {
+                        setMesaDestinoId(event.target.value);
+                        setErrorMesa(null);
+                      }}
+                    >
+                      <option value="">Selecciona una mesa</option>
+                      {mesasDestino.map((mesaDestino) => (
+                        <option key={mesaDestino.id} value={mesaDestino.id}>
+                          Mesa {mesaDestino.numero}
+                          {mesaDestino.estado === "ocupada" ? " - ocupada" : " - libre"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {mesaDestino?.estado === "ocupada" && (
+                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
+                      Esta mesa esta ocupada. Al confirmar se van a juntar los pedidos de ambas
+                      mesas en una sola cuenta.
+                    </div>
+                  )}
+                  {errorMesa && <p className="mt-2 text-sm text-destructive">{errorMesa}</p>}
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button
+                      disabled={guardandoMesa}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setMoviendoMesa(false);
+                        setMesaDestinoId("");
+                        setErrorMesa(null);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      disabled={guardandoMesa || !mesaDestinoId}
+                      size="sm"
+                      type="button"
+                      onClick={confirmarMoverMesa}
+                    >
+                      {mesaDestino?.estado === "ocupada" ? "Juntar pedidos" : "Mover mesa"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           ) : null
         }
@@ -190,18 +284,12 @@ export function MesaDetalleDialog({
                     Editar mesa
                   </button>
                   <button
-                    className="w-full px-3 py-2 text-left text-sm text-muted-foreground"
-                    disabled
+                    className="w-full px-3 py-2 text-left text-sm transition hover:bg-muted disabled:text-muted-foreground"
+                    disabled={!onMoverMesa || mesasDestino.length === 0}
                     type="button"
+                    onClick={iniciarMoverMesa}
                   >
                     Mover mesa
-                  </button>
-                  <button
-                    className="w-full px-3 py-2 text-left text-sm text-muted-foreground"
-                    disabled
-                    type="button"
-                  >
-                    Juntar mesa
                   </button>
                 </div>
               )}

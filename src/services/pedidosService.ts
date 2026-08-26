@@ -272,6 +272,82 @@ export async function actualizarPersonasPedido(
   return mapPedido(data);
 }
 
+export async function moverPedidoAMesa(
+  pedidoId: string,
+  mesaDestinoId: string
+): Promise<Pedido> {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .update({
+      tipo: "mesa",
+      mesa_id: mesaDestinoId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pedidoId)
+    .eq("estado", "abierto")
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapPedido(data);
+}
+
+export async function juntarPedidosMesa(
+  pedidoOrigenId: string,
+  pedidoDestinoId: string
+): Promise<Pedido> {
+  const updatedAt = new Date().toISOString();
+
+  const { error: itemsError } = await supabase
+    .from("pedido_items")
+    .update({ pedido_id: pedidoDestinoId, updated_at: updatedAt })
+    .eq("pedido_id", pedidoOrigenId);
+
+  if (itemsError) {
+    throw new Error(itemsError.message);
+  }
+
+  const { error: pagosError } = await supabase
+    .from("pedido_pagos")
+    .update({ pedido_id: pedidoDestinoId })
+    .eq("pedido_id", pedidoOrigenId);
+
+  if (pagosError) {
+    throw new Error(pagosError.message);
+  }
+
+  const totalDestino = await recalcularTotalPedido(pedidoDestinoId);
+
+  const { error: origenError } = await supabase
+    .from("pedidos")
+    .update({
+      estado: "cancelado",
+      total: 0,
+      updated_at: updatedAt,
+    })
+    .eq("id", pedidoOrigenId)
+    .eq("estado", "abierto");
+
+  if (origenError) {
+    throw new Error(origenError.message);
+  }
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("id, tipo, mesa_id, estado, personas, cliente, total, created_at")
+    .eq("id", pedidoDestinoId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapPedido({ ...data, total: totalDestino });
+}
+
 export async function obtenerItemsPedido(pedidoId: string): Promise<PedidoItem[]> {
   const { data, error } = await supabase
     .from("pedido_items")
