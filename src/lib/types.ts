@@ -53,6 +53,23 @@ export type Proveedor = {
   activo: boolean;
 };
 
+export type RolUsuario = {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  permisos: string[];
+  activo: boolean;
+};
+
+export type UsuarioSistema = {
+  id: string;
+  nombre: string;
+  email: string;
+  rolId?: string;
+  rolNombre?: string;
+  activo: boolean;
+};
+
 export type Caja = {
   id: string;
   nombre: string;

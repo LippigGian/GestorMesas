@@ -11,7 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfiguracionCajas } from "@/components/configuracion/ConfiguracionCajas";
+import { ConfiguracionRolesUsuarios } from "@/components/configuracion/ConfiguracionRolesUsuarios";
 import { ConfiguracionTurnos } from "@/components/configuracion/ConfiguracionTurnos";
+import { ConfiguracionUsuarios } from "@/components/configuracion/ConfiguracionUsuarios";
 import type { MedioPago, Proveedor } from "@/lib/types";
 import {
   activarMedioPago,
@@ -344,6 +346,10 @@ export function Configuracion() {
 
           {seccionActivaId === "cajas" ? (
             <ConfiguracionCajas />
+          ) : seccionActivaId === "usuarios" ? (
+            <ConfiguracionUsuarios />
+          ) : seccionActivaId === "roles" ? (
+            <ConfiguracionRolesUsuarios />
           ) : seccionActivaId === "turnos" ? (
             <ConfiguracionTurnos />
           ) : seccionActivaId === "medios-pago" ? (
