@@ -1,7 +1,8 @@
 import type { Mesa } from "@/lib/types";
+import { LOCAL_TEMPORAL_ID } from "@/lib/localTemporal";
 import { supabase } from "@/lib/supabase";
 
-export type SectorMesa = "salon" | "deck";
+export type SectorMesa = string;
 
 export type MesaConPosicion = Mesa & {
   sector: SectorMesa;
@@ -61,6 +62,7 @@ export async function guardarMesa(mesa: MesaConPosicion): Promise<MesaConPosicio
         sector: mesa.sector,
         x: mesa.x,
         y: mesa.y,
+        local_id: LOCAL_TEMPORAL_ID,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }

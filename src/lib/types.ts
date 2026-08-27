@@ -19,6 +19,12 @@ export type Celda = {
   mesa?: Mesa;
 };
 
+export type Salon = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+};
+
 export type Pedido = {
   id: string;
   horaInicio?: string;

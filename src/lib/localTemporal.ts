@@ -1,0 +1,2 @@
+export const LOCAL_TEMPORAL_ID =
+  import.meta.env.VITE_LOCAL_ID || "00000000-0000-0000-0000-000000000001";

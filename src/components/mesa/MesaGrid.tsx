@@ -419,7 +419,8 @@ import {
 
 type Props = {
   modoEdicion: boolean;
-  sectorActual: 'salon' | 'deck';
+  sectorActual: string;
+  sectores: string[];
 };
 
 const CELL_SIZE = 80;
@@ -461,7 +462,7 @@ function normalizarNumeroMesa(numero: string) {
   return numero.trim().toLocaleLowerCase();
 }
 
-function obtenerDimensionesMinimas(celdasPorSector: { salon: Celda[]; deck: Celda[] }) {
+function obtenerDimensionesMinimas(celdasPorSector: Record<string, Celda[]>) {
   const mesas = Object.values(celdasPorSector)
     .flat()
     .filter((celda) => celda.mesa);
@@ -475,7 +476,7 @@ function obtenerDimensionesMinimas(celdasPorSector: { salon: Celda[]; deck: Celd
 function ubicarMesasEnCeldas(
   celdas: Celda[],
   mesas: Awaited<ReturnType<typeof obtenerMesas>>,
-  sector: 'salon' | 'deck'
+  sector: string
 ) {
   return celdas.map((celda) => {
     const encontrada = mesas.find(
@@ -486,7 +487,7 @@ function ubicarMesasEnCeldas(
   });
 }
 
-export function MesaGrid({ modoEdicion, sectorActual }: Props) {
+export function MesaGrid({ modoEdicion, sectorActual, sectores }: Props) {
   const [cantidadFilas, setCantidadFilas] = useState(() =>
     leerDimensionGuardada(GRID_ROWS_STORAGE_KEY, 5)
   );
@@ -494,13 +495,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     leerDimensionGuardada(GRID_COLUMNS_STORAGE_KEY, 6)
   );
 
-  const [celdasPorSector, setCeldasPorSector] = useState<{
-    salon: Celda[];
-    deck: Celda[];
-  }>({
-    salon: [],
-    deck: [],
-  });
+  const [celdasPorSector, setCeldasPorSector] = useState<Record<string, Celda[]>>({});
 
   const [celdaSeleccionada, setCeldaSeleccionada] = useState<number | null>(null);
   const [numeroMesa, setNumeroMesa] = useState('');
@@ -511,6 +506,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   const [cargandoMesas, setCargandoMesas] = useState(true);
   const [errorMesas, setErrorMesas] = useState<string | null>(null);
 
+  const sectoresActivos = sectores.length > 0 ? sectores : ['salon'];
   const celdas = celdasPorSector[sectorActual] || [];
   const dimensionesMinimas = obtenerDimensionesMinimas(celdasPorSector);
   const mesasDisponibles = Object.values(celdasPorSector)
@@ -528,11 +524,13 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
 
   // Actualiza grilla al cambiar filas/columnas
   useEffect(() => {
-    setCeldasPorSector((prev) => ({
-      salon: generarCeldas(cantidadFilas, cantidadColumnas, prev.salon),
-      deck: generarCeldas(cantidadFilas, cantidadColumnas, prev.deck),
-    }));
-  }, [cantidadFilas, cantidadColumnas]);
+    setCeldasPorSector((prev) =>
+      sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
+        acc[sector] = generarCeldas(cantidadFilas, cantidadColumnas, prev[sector]);
+        return acc;
+      }, {})
+    );
+  }, [cantidadFilas, cantidadColumnas, sectoresActivos.join('|')]);
 
   useEffect(() => {
     let mounted = true;
@@ -551,15 +549,19 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
         const columnasNecesarias = Math.max(1, ...mesas.map((mesa) => mesa.x + 1));
         const filasObjetivo = Math.max(cantidadFilas, filasNecesarias);
         const columnasObjetivo = Math.max(cantidadColumnas, columnasNecesarias);
-        const salon = generarCeldas(filasObjetivo, columnasObjetivo);
-        const deck = generarCeldas(filasObjetivo, columnasObjetivo);
+        const celdasBase = sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
+          acc[sector] = generarCeldas(filasObjetivo, columnasObjetivo);
+          return acc;
+        }, {});
 
         setCantidadFilas(filasObjetivo);
         setCantidadColumnas(columnasObjetivo);
-        setCeldasPorSector({
-          salon: ubicarMesasEnCeldas(salon, mesas, 'salon'),
-          deck: ubicarMesasEnCeldas(deck, mesas, 'deck'),
-        });
+        setCeldasPorSector(
+          sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
+            acc[sector] = ubicarMesasEnCeldas(celdasBase[sector], mesas, sector);
+            return acc;
+          }, {})
+        );
       } catch (err) {
         if (mounted) {
           setErrorMesas(err instanceof Error ? err.message : 'No se pudieron cargar las mesas');
@@ -576,7 +578,7 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [sectoresActivos.join('|')]);
 
   const actualizarCeldas = (nuevas: Celda[]) => {
     setCeldasPorSector((prev) => ({
@@ -586,14 +588,16 @@ export function MesaGrid({ modoEdicion, sectorActual }: Props) {
   };
 
   const actualizarMesaEnSectores = (mesaActualizada: Mesa) => {
-    setCeldasPorSector((prev) => ({
-      salon: prev.salon.map((celda) =>
-        celda.mesa?.id === mesaActualizada.id ? { ...celda, mesa: mesaActualizada } : celda
-      ),
-      deck: prev.deck.map((celda) =>
-        celda.mesa?.id === mesaActualizada.id ? { ...celda, mesa: mesaActualizada } : celda
-      ),
-    }));
+    setCeldasPorSector((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([sector, celdasSector]) => [
+          sector,
+          celdasSector.map((celda) =>
+            celda.mesa?.id === mesaActualizada.id ? { ...celda, mesa: mesaActualizada } : celda
+          ),
+        ])
+      )
+    );
   };
 
   const refrescarPedidoMesaSeleccionada = async (mesa: Mesa) => {
