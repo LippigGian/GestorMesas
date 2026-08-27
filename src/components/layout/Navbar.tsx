@@ -47,6 +47,8 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
 
   const navButtonClass =
     "text-primary-foreground hover:bg-white/10 hover:text-primary-foreground data-[active=true]:text-secondary-foreground";
+  const navIconButtonClass =
+    "text-primary-foreground transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/15 hover:text-primary-foreground hover:shadow-md hover:ring-1 hover:ring-white/25 data-[active=true]:text-secondary-foreground [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110";
   const salonEditando = salones.find((salon) => salon.id === salonEditandoId);
 
   const limpiarFormularioSalon = () => {
@@ -127,7 +129,13 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           </Link>
 
           <Link to="/productos">
-            <Button variant="ghost" size="icon" className={navButtonClass}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={navIconButtonClass}
+              title="Productos"
+              aria-label="Productos"
+            >
               <UtensilsCrossed className="h-5 w-5" />
             </Button>
           </Link>
@@ -135,10 +143,10 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             asChild
             variant={location.pathname === "/ventas" ? "secondary" : "ghost"}
             size="icon"
-            className={navButtonClass}
+            className={navIconButtonClass}
             data-active={location.pathname === "/ventas"}
           >
-            <Link to="/ventas">
+            <Link to="/ventas" title="Ventas" aria-label="Ventas">
               <BarChart3 className="h-5 w-5" />
             </Link>
           </Button>
@@ -146,27 +154,39 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             asChild
             variant={location.pathname === "/gastos" ? "secondary" : "ghost"}
             size="icon"
-            className={navButtonClass}
+            className={navIconButtonClass}
             data-active={location.pathname === "/gastos"}
           >
-            <Link to="/gastos">
+            <Link to="/gastos" title="Gastos" aria-label="Gastos">
               <Calculator className="h-5 w-5" />
             </Link>
           </Button>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={navIconButtonClass}
+            title="Usuarios"
+            aria-label="Usuarios"
+          >
             <Users className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={navIconButtonClass}
+            title="Delivery"
+            aria-label="Delivery"
+          >
             <Truck className="h-5 w-5" />
           </Button>
           <Button
             asChild
             variant={location.pathname === "/configuracion" ? "secondary" : "ghost"}
             size="icon"
-            className={navButtonClass}
+            className={navIconButtonClass}
             data-active={location.pathname === "/configuracion"}
           >
-            <Link to="/configuracion">
+            <Link to="/configuracion" title="Configuracion" aria-label="Configuracion">
               <Settings className="h-5 w-5" />
             </Link>
           </Button>
@@ -174,7 +194,13 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
 
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Estacion de cafe</span>
-          <Button variant="ghost" size="icon" className={navButtonClass}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={navIconButtonClass}
+            title="Cerrar sesion"
+            aria-label="Cerrar sesion"
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
