@@ -6,6 +6,7 @@ import { PedidoDetallePanel } from "@/components/pedidos/PedidoDetallePanel";
 import type { Mesa, Pedido, PedidoItem } from "@/lib/types";
 import type {
   DescuentoPedidoInput,
+  ItemCobroParcialInput,
   PagoPedidoInput,
   ProductoPendientePedido,
 } from "@/services/pedidosService";
@@ -21,7 +22,10 @@ type Props = {
   onActualizarPersonas: (personas: number) => Promise<void> | void;
   onOcuparMesa: (personas: number) => Promise<void> | void;
   onMoverMesa?: (mesaDestinoId: string) => Promise<void> | void;
-  onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onCobroParcial: (
+    pagos: PagoPedidoInput[],
+    itemsCobrados?: ItemCobroParcialInput[]
+  ) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onAplicarDescuento: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };

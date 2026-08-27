@@ -14,6 +14,7 @@ import {
   obtenerItemsPedido,
   obtenerPedidosMostradorAbiertos,
   registrarPagoParcialPedido,
+  type ItemCobroParcialInput,
   type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
@@ -206,7 +207,10 @@ export function Mostrador() {
     }
   };
 
-  const registrarCobroParcial = async (pagos: PagoPedidoInput[]) => {
+  const registrarCobroParcial = async (
+    pagos: PagoPedidoInput[],
+    itemsCobrados: ItemCobroParcialInput[] = []
+  ) => {
     if (!pedidoSeleccionado) {
       return;
     }
@@ -214,7 +218,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos);
+      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos, itemsCobrados);
     } catch (err) {
       setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;

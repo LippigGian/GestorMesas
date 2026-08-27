@@ -7,6 +7,7 @@ import { useCatalogo } from "@/context/CatalogoContext";
 import type { Pedido, PedidoItem, Producto } from "@/lib/types";
 import type {
   DescuentoPedidoInput,
+  ItemCobroParcialInput,
   PagoPedidoInput,
   ProductoPendientePedido,
 } from "@/services/pedidosService";
@@ -25,7 +26,10 @@ type PedidoDetallePanelProps = {
   onConfirmarProductos: (productos: ProductoPendientePedido[]) => Promise<void> | void;
   onActualizarCantidadItem: (item: PedidoItem, cantidad: number) => Promise<void> | void;
   onEliminarItem: (itemId: string) => Promise<void> | void;
-  onCobroParcial: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onCobroParcial: (
+    pagos: PagoPedidoInput[],
+    itemsCobrados?: ItemCobroParcialInput[]
+  ) => Promise<void> | void;
   onCerrarPedido: (pagos: PagoPedidoInput[]) => Promise<void> | void;
   onAplicarDescuento?: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };

@@ -319,6 +319,15 @@ export async function juntarPedidosMesa(
     throw new Error(pagosError.message);
   }
 
+  const { error: cobrosItemsError } = await supabase
+    .from("pedido_item_cobros")
+    .update({ pedido_id: pedidoDestinoId })
+    .eq("pedido_id", pedidoOrigenId);
+
+  if (cobrosItemsError) {
+    throw new Error(cobrosItemsError.message);
+  }
+
   const totalDestino = await recalcularTotalPedido(pedidoDestinoId);
 
   const { error: origenError } = await supabase
@@ -389,6 +398,12 @@ export type PagoPedidoInput = {
   monto: number;
 };
 
+export type ItemCobroParcialInput = {
+  pedidoItemId: string;
+  cantidad: number;
+  monto: number;
+};
+
 export type DescuentoPedidoInput = {
   tipo: "monto" | "porcentaje";
   valor: number;
@@ -418,6 +433,25 @@ async function obtenerPagosPedidoRaw(pedidoId: string): Promise<PagoPedido[]> {
 export async function obtenerTotalPagadoPedido(pedidoId: string): Promise<number> {
   const pagos = await obtenerPagosPedidoRaw(pedidoId);
   return pagos.reduce((acc, pago) => acc + pago.monto, 0);
+}
+
+export async function obtenerCantidadesCobradasItems(
+  pedidoId: string
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("pedido_item_cobros")
+    .select("pedido_item_id, cantidad")
+    .eq("pedido_id", pedidoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).reduce<Record<string, number>>((acc, item) => {
+    const itemId = String(item.pedido_item_id);
+    acc[itemId] = (acc[itemId] ?? 0) + Number(item.cantidad);
+    return acc;
+  }, {});
 }
 
 function validarPagosPedido(pagos: PagoPedidoInput[]) {
@@ -490,9 +524,86 @@ async function insertarPagosPedido(
   }
 }
 
+async function validarItemsCobroParcial(
+  pedidoId: string,
+  itemsCobrados: ItemCobroParcialInput[],
+  totalPago: number
+) {
+  if (itemsCobrados.length === 0) {
+    throw new Error("Selecciona al menos un producto para cobrar.");
+  }
+
+  if (
+    itemsCobrados.some(
+      (item) => !item.pedidoItemId || !Number.isFinite(item.cantidad) || item.cantidad <= 0
+    )
+  ) {
+    throw new Error("Revisa los productos seleccionados para cobrar.");
+  }
+
+  const ids = itemsCobrados.map((item) => item.pedidoItemId);
+  const { data: items, error } = await supabase
+    .from("pedido_items")
+    .select("id, cantidad, subtotal")
+    .eq("pedido_id", pedidoId)
+    .in("id", ids);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!items || items.length !== ids.length) {
+    throw new Error("Algunos productos seleccionados ya no existen en el pedido.");
+  }
+
+  const cantidadesCobradas = await obtenerCantidadesCobradasItems(pedidoId);
+  const totalItems = itemsCobrados.reduce((acc, itemCobrado) => {
+    const item = items.find((pedidoItem) => pedidoItem.id === itemCobrado.pedidoItemId);
+
+    if (!item) {
+      throw new Error("Algunos productos seleccionados ya no existen en el pedido.");
+    }
+
+    const cantidadItem = Number(item.cantidad);
+    const cantidadYaCobrada = cantidadesCobradas[itemCobrado.pedidoItemId] ?? 0;
+    const disponible = cantidadItem - cantidadYaCobrada;
+
+    if (itemCobrado.cantidad > disponible) {
+      throw new Error("Uno de los productos seleccionados ya fue cobrado parcial o totalmente.");
+    }
+
+    return acc + itemCobrado.monto;
+  }, 0);
+
+  if (Math.abs(totalItems - totalPago) > 0.01) {
+    throw new Error("La suma de los cobros debe coincidir con los productos seleccionados.");
+  }
+}
+
+async function insertarCobrosItemsPedido(
+  pedidoId: string,
+  itemsCobrados: ItemCobroParcialInput[]
+) {
+  if (itemsCobrados.length === 0) return;
+
+  const { error } = await supabase.from("pedido_item_cobros").insert(
+    itemsCobrados.map((item) => ({
+      pedido_id: pedidoId,
+      pedido_item_id: item.pedidoItemId,
+      cantidad: item.cantidad,
+      monto: item.monto,
+    }))
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function registrarPagoParcialPedido(
   pedidoId: string,
-  pagos: PagoPedidoInput[]
+  pagos: PagoPedidoInput[],
+  itemsCobrados: ItemCobroParcialInput[] = []
 ): Promise<number> {
   validarPagosPedido(pagos);
   const total = await recalcularTotalPedido(pedidoId);
@@ -503,8 +614,13 @@ export async function registrarPagoParcialPedido(
     throw new Error("Para cobrar el total usa Cerrar venta.");
   }
 
+  if (itemsCobrados.length > 0) {
+    await validarItemsCobroParcial(pedidoId, itemsCobrados, totalNuevo);
+  }
+
   const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId);
   await insertarPagosPedido(pedidoId, pagos, arqueoCajaId);
+  await insertarCobrosItemsPedido(pedidoId, itemsCobrados);
   await recalcularTotalArqueo(arqueoCajaId);
 
   return pagadoActual + totalNuevo;
@@ -644,6 +760,13 @@ export async function actualizarCantidadItemPedido(
   cantidad: number
 ): Promise<PedidoItem[]> {
   const cantidadNormalizada = Math.max(1, Math.floor(cantidad));
+  const cantidadesCobradas = await obtenerCantidadesCobradasItems(pedidoId);
+  const cantidadCobrada = cantidadesCobradas[item.id] ?? 0;
+
+  if (cantidadNormalizada < cantidadCobrada) {
+    throw new Error("No se puede bajar la cantidad por debajo de lo ya cobrado.");
+  }
+
   const { error } = await supabase
     .from("pedido_items")
     .update({
@@ -666,6 +789,12 @@ export async function eliminarItemPedido(
   pedidoId: string,
   itemId: string
 ): Promise<PedidoItem[]> {
+  const cantidadesCobradas = await obtenerCantidadesCobradasItems(pedidoId);
+
+  if ((cantidadesCobradas[itemId] ?? 0) > 0) {
+    throw new Error("No se puede eliminar un producto que ya fue cobrado.");
+  }
+
   const { error } = await supabase
     .from("pedido_items")
     .delete()

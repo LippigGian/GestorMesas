@@ -413,6 +413,7 @@ import {
   obtenerPedidoAbiertoPorMesa,
   registrarPagoParcialPedido,
   type DescuentoPedidoInput,
+  type ItemCobroParcialInput,
   type PagoPedidoInput,
   type ProductoPendientePedido,
 } from '@/services/pedidosService';
@@ -908,12 +909,15 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     setPedidoItems([]);
   };
 
-  const registrarCobroParcialMesa = async (pagos: PagoPedidoInput[]) => {
+  const registrarCobroParcialMesa = async (
+    pagos: PagoPedidoInput[],
+    itemsCobrados: ItemCobroParcialInput[] = []
+  ) => {
     if (!pedidoActivo) return;
 
     try {
       setErrorMesas(null);
-      await registrarPagoParcialPedido(pedidoActivo.id, pagos);
+      await registrarPagoParcialPedido(pedidoActivo.id, pagos, itemsCobrados);
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;
