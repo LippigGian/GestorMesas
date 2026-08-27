@@ -16,7 +16,7 @@ export default function MesaManager({ modoEdicion }: MesaManagerProps) {
       <MesaGrid
         modoEdicion={modoEdicion}
         sectorActual={sectorActual}
-        sectores={salones.map((salon) => salon.id)}
+        salones={salones}
       />
     </main>
   );

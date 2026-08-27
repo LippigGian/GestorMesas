@@ -76,6 +76,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import type { Salon } from "@/lib/types";
 
 type Props = {
   open: boolean;
@@ -84,6 +85,9 @@ type Props = {
   setNumeroMesa: (valor: string) => void;
   forma: "cuadrada" | "redonda";
   setForma: (valor: "cuadrada" | "redonda") => void;
+  salones?: Salon[];
+  sectorMesa?: string;
+  setSectorMesa?: (valor: string) => void;
   onConfirmar: () => void;
   modoEdicion: boolean;
 };
@@ -95,6 +99,9 @@ export function MesaDialog({
   setNumeroMesa,
   forma,
   setForma,
+  salones = [],
+  sectorMesa,
+  setSectorMesa,
   onConfirmar,
   modoEdicion,
 }: Props) {
@@ -135,6 +142,23 @@ export function MesaDialog({
               </Button>
             </div>
           </div>
+
+          {salones.length > 0 && sectorMesa !== undefined && setSectorMesa && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Salon</label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={sectorMesa}
+                onChange={(event) => setSectorMesa(event.target.value)}
+              >
+                {salones.map((salon) => (
+                  <option key={salon.id} value={salon.id}>
+                    {salon.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex justify-end pt-2 gap-2">
             <Button variant="outline" onClick={onClose}>
