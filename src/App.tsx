@@ -16,7 +16,7 @@ function AppContent() {
   const ocultarNavbar = location.pathname === "/login";
 
   return (
-    <>
+    <div className="mesas-spa-theme">
       {!ocultarNavbar && <Navbar modoEdicion={modoEdicion} setModoEdicion={setModoEdicion} />}
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -27,7 +27,7 @@ function AppContent() {
         <Route path="/gastos" element={<Gastos />} />
         <Route path="/configuracion" element={<Configuracion />} />
       </Routes>
-    </>
+    </div>
   );
 }
 

@@ -41,3 +41,250 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Shared cream and coral visual theme. */
+.mesas-spa-theme {
+  --background: #fff5ef;
+  --foreground: #3d4564;
+  --card: #ffffff;
+  --card-foreground: #3d4564;
+  --primary: #b94f3c;
+  --primary-foreground: #ffffff;
+  --secondary: #fce6dc;
+  --secondary-foreground: #a74635;
+  --muted: #fcf0e9;
+  --muted-foreground: #68718a;
+  --accent: #f7c4b0;
+  --accent-foreground: #873e30;
+  --border: #eedfd6;
+  --input: #dfc9bd;
+  --ring: #bd5743;
+  min-height: 100dvh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.mesas-spa-theme > header {
+  background: #fffbf8;
+  color: var(--foreground);
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.mesas-spa-theme > header > div {
+  padding-left: clamp(16px, 3vw, 48px);
+  padding-right: clamp(16px, 3vw, 48px);
+  border-color: var(--border);
+}
+
+.mesas-spa-theme > header > div:nth-child(2),
+.mesas-spa-theme > header > div:nth-child(3) {
+  background: transparent;
+}
+
+.mesas-spa-theme > header > div:first-child {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mesas-spa-theme > header > div:first-child > div:first-child {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mesas-spa-theme > header [data-slot="button"] {
+  color: var(--foreground);
+  border-radius: 999px;
+  box-shadow: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.mesas-spa-theme > header [data-slot="button"]:hover {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  transform: none;
+}
+
+.mesas-spa-theme > header [data-slot="button"][data-active="true"] {
+  background: #fce8de;
+  color: #a74635;
+  box-shadow: inset 0 0 0 1px #d57961;
+}
+
+.mesas-spa-theme > header > div:nth-child(2) > div,
+.mesas-spa-theme > header > div:nth-child(3) span {
+  color: var(--muted-foreground);
+}
+
+.mesas-spa-theme > header > div:nth-child(3) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.mesas-spa-main {
+  width: 100%;
+  padding: 20px 32px 32px;
+}
+
+.mesas-spa-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.mesas-spa-brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #fce6dc; color: #a74635; }
+
+.mesas-spa-intro {
+  text-align: center;
+  padding: 8px 0 30px;
+}
+
+.mesas-spa-eyebrow {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: #fce6dc;
+  color: #a74635;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mesas-spa-intro h1 {
+  margin: 14px 0 8px;
+  font-family: "Arial Rounded MT Bold", "Trebuchet MS", ui-rounded, sans-serif;
+  font-size: clamp(26px, 3vw, 40px);
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.mesas-spa-intro h1 span { color: #bf5942; }
+.mesas-spa-intro p { color: var(--muted-foreground); font-size: 15px; }
+
+.mesas-spa-floor {
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  padding: 24px;
+  border-color: #eedfd6;
+  background: #fffcfa;
+  box-shadow: 0 8px 32px #86513b06;
+}
+
+.mesas-spa-floor > .mesa-floor-layout {
+  flex-shrink: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+@media (min-width: 1024px) {
+  .mesas-spa-floor { min-height: calc(100dvh - 16rem); }
+}
+
+.mesas-spa-theme .mesa-visual {
+  cursor: pointer;
+  box-shadow: 0 5px 12px #4c66500a;
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 24px;
+  transition: box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.mesas-spa-theme .mesa-visual.rounded-md { border-radius: 20px; }
+.mesas-spa-theme .mesa-visual.bg-emerald-100 {
+  background: #edf6f1;
+  border-color: #bed9cb;
+  color: #356451;
+}
+.mesas-spa-theme .mesa-visual.bg-red-100 {
+  background: #fce6dc;
+  border-color: #e5ad99;
+  color: #9a4536;
+}
+.mesas-spa-theme .mesa-visual:hover { box-shadow: 0 6px 18px #86513b20; }
+.mesas-spa-theme .mesa-visual.bg-emerald-100:hover { background: #e0efe7; }
+.mesas-spa-theme .mesa-visual.bg-red-100:hover { background: #f9d8c9; }
+
+.mesas-spa-theme main [data-slot="button"] { border-radius: 999px; }
+
+/* Presentation only: shared surfaces, fields and data tables. */
+.mesas-spa-theme main { min-width: 0; }
+.mesas-spa-theme main :is(section, aside) { min-width: 0; }
+.mesas-spa-theme main :is(section, aside, div).bg-card {
+  border-radius: 20px;
+  box-shadow: 0 5px 20px #86513b06;
+}
+.mesas-spa-theme main :is(section, aside, div).border.bg-card {
+  border-color: var(--border);
+}
+.mesas-spa-theme main :is(h1, h2) {
+  letter-spacing: -0.025em;
+}
+.mesas-spa-theme main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-radius: 10px;
+  border-color: var(--input);
+  background-color: var(--card);
+  color: var(--foreground);
+}
+.mesas-spa-theme main table {
+  background: var(--card);
+  font-variant-numeric: tabular-nums;
+}
+.mesas-spa-theme main :is(thead, thead tr) {
+  background: #fcf0e9;
+  color: #5d5360;
+}
+.mesas-spa-theme main th { font-weight: 600; }
+.mesas-spa-theme main :is(td, th) { border-color: var(--border); }
+.mesas-spa-theme main tbody tr:hover { background-color: #fff8f3; }
+.mesas-spa-theme .spa-catalog { gap: 24px; padding: 20px 32px 32px; }
+.mesas-spa-theme .spa-catalog > aside {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  align-self: flex-start;
+}
+.mesas-spa-theme .spa-catalog > section {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  overflow-x: auto;
+}
+.mesas-spa-theme .spa-expenses { gap: 16px; padding: 20px 32px 32px; }
+.mesas-spa-theme .spa-expenses > section { border-right: 0; padding: 0; }
+.mesas-spa-theme .spa-expenses > aside {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+}
+[data-slot="dialog-content"] {
+  border-radius: 24px;
+  box-shadow: 0 20px 60px #60433420;
+}
+[data-slot="dialog-content"] [data-slot="button"] { border-radius: 999px; }
+[data-slot="dialog-content"] :is(input, select, textarea) { border-radius: 10px; }
+@media (max-width: 1023px) {
+  .mesas-spa-theme .spa-expenses { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .mesas-spa-theme .spa-catalog { flex-direction: column; gap: 16px; padding: 16px; }
+  .mesas-spa-theme .spa-catalog > aside { width: 100%; }
+  .mesas-spa-theme .spa-catalog > section { width: 100%; padding: 16px; }
+  .mesas-spa-theme .spa-expenses { padding: 16px; }
+}
+.mesas-spa-theme main > div > div.bg-card {
+  border-radius: 24px;
+  box-shadow: 0 8px 32px #86513b08;
+}
+
+@media (max-width: 640px) {
+  .mesas-spa-intro { padding-bottom: 22px; }
+  .mesas-spa-floor { padding: 16px; border-radius: 20px; }
+  .mesas-spa-theme > header > div:nth-child(2) { gap: 8px; flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesas-spa-theme *, .mesas-spa-theme *::before, .mesas-spa-theme *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

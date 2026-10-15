@@ -1007,7 +1007,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <section className="min-w-0 flex-1 overflow-x-auto rounded-lg border bg-card p-4 shadow-sm">
+      <section className="mesas-spa-floor min-w-0 flex-1 overflow-x-auto rounded-lg border bg-card p-4 shadow-sm">
         {errorMesas && (
           <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {errorMesas}
@@ -1045,7 +1045,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         )}
 
         <div
-          className={modoEdicion ? 'grid gap-4' : 'relative'}
+          className={modoEdicion ? 'mesa-floor-layout mx-auto grid w-max gap-4' : 'mesa-floor-layout relative mx-auto'}
           style={
             modoEdicion
               ? {
@@ -1068,34 +1068,36 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
                           estado={celda.mesa.estado}
                         />
                       </DraggableMesa>
-                      <div className="absolute right-1 top-1 flex gap-1">
+                      <div className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
                         <Button
-                          className="h-6 w-6 bg-background/90 text-foreground shadow-sm"
+                          className="h-8 w-8 bg-card text-foreground shadow-sm"
                           size="icon"
                           type="button"
                           variant="outline"
                           title="Editar mesa"
+                          aria-label={`Editar mesa ${celda.mesa.numero}`}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
                             handleAbrirDialogo(i);
                           }}
                         >
-                          <Pencil className="h-3 w-3" />
+                          <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
-                          className="h-6 w-6 shadow-sm hover:bg-red-700 hover:text-white hover:ring-2 hover:ring-red-300"
+                          className="h-8 w-8 bg-card text-destructive shadow-sm hover:bg-destructive/10 hover:text-destructive"
                           size="icon"
                           type="button"
-                          variant="destructive"
+                          variant="outline"
                           title="Eliminar mesa"
+                          aria-label={`Eliminar mesa ${celda.mesa.numero}`}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
                             borrarMesa(i);
                           }}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

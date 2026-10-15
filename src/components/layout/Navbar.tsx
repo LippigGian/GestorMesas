@@ -125,7 +125,10 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
         <div className="flex items-center gap-4">
           <Link to="/">
-            <img src="/logo.png" alt="Estacion de cafe" className="h-8" />
+              <span className="mesas-spa-brand" aria-label="Estación de café">
+                <span className="mesas-spa-brand-mark"><UtensilsCrossed aria-hidden="true" className="h-4 w-4" /></span>
+                <span>Estación de café</span>
+              </span>
           </Link>
 
           <Link to="/productos">
@@ -258,16 +261,16 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             ) : (
               <span className="px-3 py-2 text-sm text-primary-foreground/80">Sin salones</span>
             )}
-            <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary">
+            <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary" aria-pressed={modoEdicion}>
               {modoEdicion ? (
                 <>
                   <Save className="h-4 w-4" />
-                  Guardar
+                  Finalizar edición
                 </>
               ) : (
                 <>
                   <Pencil className="h-4 w-4" />
-                  Editar
+                  Editar plano
                 </>
               )}
             </Button>

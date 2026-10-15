@@ -12,11 +12,14 @@ export function MesaCard({ numero, tipo, estado = 'libre' }: Props) {
 
   return (
 <div
-  className={`h-full w-full border text-lg font-bold shadow-sm transition ${
+  className={`mesa-visual h-full w-full border text-lg font-bold shadow-sm transition ${
     tipo === 'redonda' ? 'rounded-full' : 'rounded-md'
-  } ${colorEstado} flex items-center justify-center`}
+  } ${colorEstado} flex flex-col items-center justify-center gap-0.5`}
 >
-  {numero}
+  <span className="leading-tight">{numero}</span>
+  <span className="text-[11px] font-medium leading-tight">
+    {estado === 'ocupada' ? 'Ocupada' : 'Libre'}
+  </span>
 </div>
 
   );

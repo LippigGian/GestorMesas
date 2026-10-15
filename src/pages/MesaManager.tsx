@@ -9,10 +9,7 @@ export default function MesaManager({ modoEdicion }: MesaManagerProps) {
   const { sectorActual, salones } = useSector();
 
   return (
-    <main className="p-4">
-      <div className="mb-4 flex items-center justify-between">
-      </div>
-
+    <main className="mesas-spa-main">
       <MesaGrid
         modoEdicion={modoEdicion}
         sectorActual={sectorActual}

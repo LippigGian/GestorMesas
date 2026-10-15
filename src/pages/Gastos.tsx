@@ -273,7 +273,7 @@ export function Gastos() {
   };
 
   return (
-    <main className="grid min-h-[calc(100vh-128px)] grid-cols-[minmax(0,1fr)_420px] bg-background">
+    <main className="spa-expenses grid min-h-[calc(100vh-128px)] grid-cols-[minmax(0,1fr)_420px] bg-background">
       <section className="border-r p-4">
         <div className="mb-4 flex items-center justify-between bg-primary/80 px-4 py-3 text-primary-foreground">
           <h1 className="text-xl font-bold">Gastos</h1>

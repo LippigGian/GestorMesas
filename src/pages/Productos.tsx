@@ -33,7 +33,7 @@ export function Productos() {
   const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
 
   return (
-    <main className="flex min-h-[calc(100vh-128px)]">
+    <main className="spa-catalog flex min-h-[calc(100vh-128px)]">
       <aside className="w-60 border-r bg-card p-4 shadow-sm">
         <h2 className="mb-3 font-bold text-foreground">Categorias</h2>
         <ul className="space-y-1">

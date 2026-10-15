@@ -308,7 +308,7 @@ export function Configuracion() {
   };
 
   return (
-    <main className="flex min-h-[calc(100vh-128px)] bg-background">
+    <main className="spa-catalog flex min-h-[calc(100vh-128px)] bg-background">
       <aside className="w-72 border-r bg-card p-4 shadow-sm">
         <h1 className="mb-4 text-xl font-bold text-foreground">Configuracion</h1>
         <nav className="space-y-1">
