@@ -10,6 +10,7 @@ import { Configuracion } from './pages/Configuracion'
 import { Ventas } from './pages/Ventas'
 import { Gastos } from './pages/Gastos'
 import { Login } from './pages/Login'
+import { Metricas } from './pages/Metricas'
 
 function AppContent() {
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -25,6 +26,7 @@ function AppContent() {
         <Route path="/mostrador" element={<Mostrador />} />
         <Route path="/productos" element={<Productos />} />
         <Route path="/ventas" element={<Ventas />} />
+        <Route path="/metricas" element={<Metricas />} />
         <Route path="/gastos" element={<Gastos />} />
         <Route path="/configuracion" element={<Configuracion />} />
       </Routes>

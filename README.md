@@ -1,5 +1,26 @@
 # Gestor Mesas
 
+## Métricas
+
+La página `/metricas` permite analizar períodos de hasta 366 días, con fechas en
+hora de Argentina y montos en ARS. No requiere nuevas migraciones SQL.
+
+- Ventas: pedidos cerrados dentro del período, según `closed_at`. Excluye abiertos
+  y cancelados. El total incluye descuentos generales; el ticket promedio divide
+  ese importe por la cantidad de pedidos cerrados.
+- Productos: renglones de esos pedidos, agrupados por identificador de producto.
+  Los descuentos negativos no se cuentan como productos. Sus importes se muestran
+  antes de descuentos generales del pedido.
+- Medios de pago: cobros por `pedido_pagos.created_at`, incluidos pagos parciales
+  y pagos conservados en pedidos cancelados. Pueden diferir de las ventas del período.
+- Gastos: por `gastos.fecha`, agrupados por categoría. Los gastos sin categoría
+  aparecen en un grupo propio.
+
+Las consultas son de solo lectura y paginan los resultados. No se calculan
+rentabilidad ni resultado de caja.
+
+Para verificar agregaciones, fechas y paginación: `node --test tests/metricas.test.cjs`.
+
 Aplicacion web hecha con React, TypeScript y Vite para gestionar mesas.
 
 ## Requisitos

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ChartNoAxesCombined,
   Coffee,
   LayoutGrid,
   ShoppingBag,
@@ -80,6 +81,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
     { to: "/mostrador", label: "Mostrador", icon: ShoppingBag },
     { to: "/productos", label: "Productos", icon: UtensilsCrossed },
     { to: "/ventas", label: "Ventas", icon: BarChart3 },
+    { to: "/metricas", label: "Métricas", icon: ChartNoAxesCombined },
     { to: "/gastos", label: "Gastos", icon: Calculator },
   ];
   const salonEditando = salones.find((salon) => salon.id === salonEditandoId);
