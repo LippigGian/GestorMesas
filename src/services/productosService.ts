@@ -3,11 +3,13 @@ import { supabase } from "@/lib/supabase";
 
 type CategoriaRow = {
   id: string;
+  local_id: string;
   nombre: string;
 };
 
 type ProductoRow = {
   id: string;
+  local_id: string;
   categoria_id: string;
   nombre: string;
   descripcion: string | null;
@@ -22,6 +24,7 @@ type ProductoRow = {
 function mapCategoria(row: CategoriaRow): Categoria {
   return {
     id: row.id,
+    localId: row.local_id,
     nombre: row.nombre,
   };
 }
@@ -29,6 +32,7 @@ function mapCategoria(row: CategoriaRow): Categoria {
 function mapProducto(row: ProductoRow): Producto {
   return {
     id: row.id,
+    localId: row.local_id,
     nombre: row.nombre,
     precio: Number(row.precio),
     categoriaId: row.categoria_id,
@@ -41,8 +45,14 @@ function mapProducto(row: ProductoRow): Producto {
   };
 }
 
-export async function obtenerCategorias(): Promise<Categoria[]> {
-  const { data, error } = await supabase.from("categorias").select("id, nombre").order("nombre");
+export async function obtenerCategorias(localId?: string): Promise<Categoria[]> {
+  let query = supabase.from("categorias").select("id, local_id, nombre").order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -51,11 +61,17 @@ export async function obtenerCategorias(): Promise<Categoria[]> {
   return (data ?? []).map(mapCategoria);
 }
 
-export async function obtenerProductos(): Promise<Producto[]> {
-  const { data, error } = await supabase
+export async function obtenerProductos(localId?: string): Promise<Producto[]> {
+  let query = supabase
     .from("productos")
-    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .select("id, local_id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
     .order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -67,8 +83,8 @@ export async function obtenerProductos(): Promise<Producto[]> {
 export async function crearCategoria(categoria: Categoria): Promise<Categoria> {
   const { data, error } = await supabase
     .from("categorias")
-    .insert({ nombre: categoria.nombre })
-    .select("id, nombre")
+    .insert({ local_id: categoria.localId, nombre: categoria.nombre })
+    .select("id, local_id, nombre")
     .single();
 
   if (error) {
@@ -83,6 +99,7 @@ export async function crearProducto(producto: Producto): Promise<Producto> {
     .from("productos")
     .insert({
       categoria_id: producto.categoriaId,
+      local_id: producto.localId,
       nombre: producto.nombre,
       precio: producto.precio,
       descripcion: producto.descripcion ?? null,
@@ -92,7 +109,7 @@ export async function crearProducto(producto: Producto): Promise<Producto> {
       controla_stock: producto.controlaStock ?? false,
       stock: producto.stock ?? null,
     })
-    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .select("id, local_id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
     .single();
 
   if (error) {
@@ -113,7 +130,7 @@ export async function actualizarProducto(producto: Producto): Promise<Producto> 
       updated_at: new Date().toISOString(),
     })
     .eq("id", producto.id)
-    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .select("id, local_id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
     .single();
 
   if (error) {
@@ -134,7 +151,7 @@ export async function actualizarFavoritoProducto(
       updated_at: new Date().toISOString(),
     })
     .eq("id", productoId)
-    .select("id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
+    .select("id, local_id, categoria_id, nombre, descripcion, precio, costo, activo, favorito, controla_stock, stock")
     .single();
 
   if (error) {

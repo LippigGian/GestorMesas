@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Filter, Plus, ReceiptText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLocal } from "@/context/LocalContext";
 import type { ArqueoCaja, ArqueoCajaMedioPago, Caja, MedioPago } from "@/lib/types";
 import {
   cerrarArqueoCaja,
@@ -139,6 +140,7 @@ function crearPagosEdicionDesdeVenta(venta: VentaResumen, medioPagoDefaultId: st
 }
 
 export function Ventas() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [tabActiva, setTabActiva] = useState<VentasTab>("ventas");
   const [arqueos, setArqueos] = useState<ArqueoCaja[]>([]);
   const [cajas, setCajas] = useState<Caja[]>([]);
@@ -163,6 +165,15 @@ export function Ventas() {
   const totalVentas = arqueos.reduce((acc, arqueo) => acc + arqueo.totalVentas, 0);
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setMediosPago([]);
+      setErrorArqueos(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarDatos() {
@@ -170,9 +181,9 @@ export function Ventas() {
         setCargandoArqueos(true);
         setErrorArqueos(null);
         const [arqueosDb, cajasDb, mediosPagoDb] = await Promise.all([
-          obtenerArqueosCaja(),
-          obtenerCajas(),
-          obtenerMediosPago(),
+          obtenerArqueosCaja(localIdActual),
+          obtenerCajas(localIdActual),
+          obtenerMediosPago(localIdActual),
         ]);
 
         if (mounted) {
@@ -197,9 +208,14 @@ export function Ventas() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   const abrirArqueo = async () => {
+    if (!localId) {
+      setErrorArqueos("No hay un local activo configurado.");
+      return;
+    }
+
     let monto = 0;
 
     try {
@@ -218,6 +234,7 @@ export function Ventas() {
       setGuardandoArqueo(true);
       setErrorArqueos(null);
       const creado = await crearArqueoCaja({
+        localId,
         cajaId,
         montoInicial: monto,
         openedAt: fechaHoraApertura,
@@ -278,7 +295,7 @@ export function Ventas() {
     try {
       const detalle =
         arqueo.estado === "abierto"
-          ? await obtenerMontosSistemaMediosPagoArqueo(arqueo.id)
+          ? await obtenerMontosSistemaMediosPagoArqueo(arqueo.id, localId ?? undefined)
           : await obtenerDetalleMediosPagoArqueo(arqueo.id);
       setDetalleMediosSeleccionado(detalle);
     } catch {
@@ -366,6 +383,7 @@ export function Ventas() {
 }
 
 function VentasView() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [ventas, setVentas] = useState<VentaResumen[]>([]);
   const [ventaSeleccionada, setVentaSeleccionada] = useState<VentaResumen | null>(null);
   const [turnos, setTurnos] = useState<Awaited<ReturnType<typeof obtenerTurnos>>>([]);
@@ -386,11 +404,21 @@ function VentasView() {
   const [errorPagos, setErrorPagos] = useState<string | null>(null);
 
   const cargarVentas = async () => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setVentas([]);
+      setVentaSeleccionada(null);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
     try {
       setCargando(true);
       setError(null);
       const turnoSeleccionado = turnos.find((turno) => turno.id === turnoId);
       const ventasDb = await obtenerVentas({
+        localId,
         fechaDesde,
         fechaHasta,
         estado,
@@ -418,14 +446,23 @@ function VentasView() {
   };
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setMediosPago([]);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarOpciones() {
       try {
         const [turnosDb, mediosDb, mesasDb] = await Promise.all([
-          obtenerTurnos(),
-          obtenerMediosPago(),
-          obtenerMesas(),
+          obtenerTurnos(localIdActual),
+          obtenerMediosPago(localIdActual),
+          obtenerMesas(localIdActual),
         ]);
 
         if (mounted) {
@@ -445,12 +482,12 @@ function VentasView() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   useEffect(() => {
     cargarVentas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fechaDesde, fechaHasta, estado, tipo, turnoId, medioPagoId, mesaId, turnos]);
+  }, [cargandoLocal, errorLocal, fechaDesde, fechaHasta, estado, tipo, turnoId, medioPagoId, mesaId, localId, turnos]);
 
   const resumen = useMemo(() => {
     const total = ventas.reduce((acc, venta) => acc + venta.total, 0);

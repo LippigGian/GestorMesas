@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
+import { useLocal } from "@/context/LocalContext";
+
 const STORAGE_KEY = "gestor-mesas.configuracion-general.nombre-negocio";
 const DEFAULT_NAME = "Estación de café";
 
-function leerNombre() {
+function leerNombre(storageKey: string, fallback: string) {
   try {
-    return localStorage.getItem(STORAGE_KEY)?.trim() || DEFAULT_NAME;
+    return localStorage.getItem(storageKey)?.trim() || fallback;
   } catch {
-    return DEFAULT_NAME;
+    return fallback;
   }
 }
 
@@ -17,7 +19,12 @@ const ConfiguracionGeneralContext = createContext<{
 } | null>(null);
 
 export function ConfiguracionGeneralProvider({ children }: { children: ReactNode }) {
-  const [nombreNegocio, setNombreNegocio] = useState(leerNombre);
+  const { local } = useLocal();
+  return <ConfiguracionDelLocal key={local?.id ?? "sin-local"} storageKey={`${STORAGE_KEY}.${local?.id ?? "sin-local"}`} nombreInicial={local?.nombre ?? DEFAULT_NAME}>{children}</ConfiguracionDelLocal>;
+}
+
+function ConfiguracionDelLocal({ children, storageKey, nombreInicial }: { children: ReactNode; storageKey: string; nombreInicial: string }) {
+  const [nombreNegocio, setNombreNegocio] = useState(() => leerNombre(storageKey, nombreInicial));
 
   const guardarNombreNegocio = (nombre: string) => {
     const normalizado = nombre.trim().replace(/\s+/g, " ");
@@ -25,7 +32,7 @@ export function ConfiguracionGeneralProvider({ children }: { children: ReactNode
       throw new Error("Ingresá un nombre de entre 1 y 60 caracteres.");
     }
     try {
-      localStorage.setItem(STORAGE_KEY, normalizado);
+      localStorage.setItem(storageKey, normalizado);
     } catch {
       throw new Error("No se pudo guardar. Verificá que el navegador permita el almacenamiento local.");
     }

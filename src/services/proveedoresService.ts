@@ -37,10 +37,11 @@ export function validarNombreProveedor(nombre: string) {
   return limpio;
 }
 
-export async function obtenerProveedores(): Promise<Proveedor[]> {
+export async function obtenerProveedores(localId: string): Promise<Proveedor[]> {
   const { data, error } = await supabase
     .from("proveedores")
     .select("id, nombre, activo")
+    .eq("local_id", localId)
     .eq("activo", true)
     .order("nombre");
 
@@ -51,10 +52,11 @@ export async function obtenerProveedores(): Promise<Proveedor[]> {
   return (data ?? []).map(mapProveedor);
 }
 
-export async function obtenerTodosProveedores(): Promise<Proveedor[]> {
+export async function obtenerTodosProveedores(localId: string): Promise<Proveedor[]> {
   const { data, error } = await supabase
     .from("proveedores")
     .select("id, nombre, activo")
+    .eq("local_id", localId)
     .order("nombre");
 
   if (error) {
@@ -64,12 +66,12 @@ export async function obtenerTodosProveedores(): Promise<Proveedor[]> {
   return (data ?? []).map(mapProveedor);
 }
 
-export async function crearProveedor(nombre: string): Promise<Proveedor> {
+export async function crearProveedor(nombre: string, localId: string): Promise<Proveedor> {
   const nombreValidado = validarNombreProveedor(nombre);
 
   const { data, error } = await supabase
     .from("proveedores")
-    .insert({ nombre: nombreValidado, activo: true })
+    .insert({ nombre: nombreValidado, activo: true, local_id: localId })
     .select("id, nombre, activo")
     .single();
 

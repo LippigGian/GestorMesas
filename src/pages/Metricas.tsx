@@ -3,6 +3,7 @@ import { BarChart3, CalendarDays, CreditCard, Package, RefreshCw, ShoppingBag, W
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { desplazarFecha, fechaNegocio, resumirMetricas, validarRango, type DatosMetricas, type GrupoImporte, type RangoMetricas } from "@/lib/metricas";
+import { useLocal } from "@/context/LocalContext";
 import { obtenerMetricas } from "@/services/metricasService";
 import "./Metricas.css";
 
@@ -60,6 +61,7 @@ function Desglose({ grupos, total, tipo }: { grupos: GrupoImporte[]; total: numb
 }
 
 export function Metricas() {
+  const { localId } = useLocal();
   const hoy = fechaNegocio();
   const [rango, setRango] = useState<RangoMetricas>(() => ({ desde: `${hoy.slice(0, 7)}-01`, hasta: hoy }));
   const [borrador, setBorrador] = useState(rango);
@@ -71,17 +73,18 @@ export function Metricas() {
   const [cargando, setCargando] = useState(true);
   const [recarga, setRecarga] = useState(0);
   useEffect(() => {
+    if (!localId) return;
     const controller = new AbortController();
     setCargando(true);
     setDatos(null);
     setError("");
-    obtenerMetricas(rango, controller.signal).then((resultado) => {
+    obtenerMetricas(rango, controller.signal, localId).then((resultado) => {
       if (!controller.signal.aborted) setDatos(resultado);
     }).catch((err) => {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "No se pudieron cargar las métricas.");
     }).finally(() => { if (!controller.signal.aborted) setCargando(false); });
     return () => controller.abort();
-  }, [rango, recarga]);
+  }, [rango, recarga, localId]);
   const resumen = useMemo(() => datos ? resumirMetricas(datos, rango, agrupacion) : null, [datos, rango, agrupacion]);
   const productos = useMemo(() => {
     const filas = [...(resumen?.productos ?? [])];

@@ -13,15 +13,16 @@ export async function leerPaginas<T>(consultar: (desde: number, hasta: number) =
   }
 }
 
-export async function obtenerMetricas(rango: RangoMetricas, signal: AbortSignal): Promise<DatosMetricas> {
+export async function obtenerMetricas(rango: RangoMetricas, signal: AbortSignal, localId: string): Promise<DatosMetricas> {
+  if (!localId) throw new Error("No hay un local activo configurado.");
   const { inicio, fin } = limitesRango(rango);
   const [ventas, pagos, gastos] = await Promise.all([
     leerPaginas((desde, hasta) => supabase.from("pedidos").select("id, estado, closed_at, total")
-      .eq("estado", "cerrado").gte("closed_at", inicio).lt("closed_at", fin).order("id").range(desde, hasta).abortSignal(signal)),
+      .eq("local_id", localId).eq("estado", "cerrado").gte("closed_at", inicio).lt("closed_at", fin).order("id").range(desde, hasta).abortSignal(signal)),
     leerPaginas((desde, hasta) => supabase.from("pedido_pagos").select("id, medio_pago_id, monto, medios_pago(nombre)")
-      .gte("created_at", inicio).lt("created_at", fin).order("id").range(desde, hasta).abortSignal(signal)),
+      .eq("local_id", localId).gte("created_at", inicio).lt("created_at", fin).order("id").range(desde, hasta).abortSignal(signal)),
     leerPaginas((desde, hasta) => supabase.from("gastos").select("id, categoria, importe")
-      .gte("fecha", inicio).lt("fecha", fin).order("id").range(desde, hasta).abortSignal(signal)),
+      .eq("local_id", localId).gte("fecha", inicio).lt("fecha", fin).order("id").range(desde, hasta).abortSignal(signal)),
   ]);
   const items: DatosMetricas["items"] = [];
   // Consultar por grupos de pedidos evita URLs excesivas y límites en relaciones anidadas.
@@ -29,7 +30,7 @@ export async function obtenerMetricas(rango: RangoMetricas, signal: AbortSignal)
     const ids = ventas.slice(offset, offset + 100).map((venta) => venta.id);
     const filas = await leerPaginas((desde, hasta) => supabase.from("pedido_items")
       .select("id, pedido_id, producto_id, nombre_producto, cantidad, subtotal")
-      .in("pedido_id", ids).order("id").range(desde, hasta).abortSignal(signal));
+      .eq("local_id", localId).in("pedido_id", ids).order("id").range(desde, hasta).abortSignal(signal));
     items.push(...filas.map((item) => ({ pedidoId: item.pedido_id, productoId: item.producto_id,
       nombre: item.nombre_producto, cantidad: Number(item.cantidad), subtotal: Number(item.subtotal) })));
   }

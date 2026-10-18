@@ -29,6 +29,7 @@ import {
   desactivarSalon,
   normalizarNombreSalon,
 } from "@/services/salonesService";
+import { useAuth } from "@/context/AuthContext";
 
 type NavbarProps = {
   modoEdicion: boolean;
@@ -74,6 +75,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   const [salonEditandoId, setSalonEditandoId] = useState<string | null>(null);
   const [guardandoSalon, setGuardandoSalon] = useState(false);
   const [errorGestionSalones, setErrorGestionSalones] = useState<string | null>(null);
+  const { cerrarSesion, user } = useAuth();
 
   const navButtonClass = "navbar-link";
   const navigation = [
@@ -188,7 +190,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
               <Settings className="h-5 w-5" aria-hidden="true" />
             </Link>
           </Button>
-          <Button variant="ghost" size="icon" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <Button variant="ghost" size="icon" title={user?.email ? `Cerrar sesión (${user.email})` : "Cerrar sesión"} aria-label="Cerrar sesión" onClick={() => { cerrarSesion().catch(() => window.alert("No se pudo cerrar la sesión. Intentá nuevamente.")); }}>
             <LogOut className="h-5 w-5" aria-hidden="true" />
           </Button>
         </div>

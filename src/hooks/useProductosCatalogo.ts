@@ -11,6 +11,7 @@ import {
   obtenerProductos,
 } from "@/services/productosService";
 import { useCatalogo } from "@/context/CatalogoContext";
+import { useLocal } from "@/context/LocalContext";
 
 function normalizarNombre(nombre: string) {
   return nombre.trim().toLocaleLowerCase();
@@ -18,6 +19,7 @@ function normalizarNombre(nombre: string) {
 
 export function useProductosCatalogo() {
   const { recargarCatalogo } = useCatalogo();
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
@@ -27,6 +29,17 @@ export function useProductosCatalogo() {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setCategorias([]);
+      setProductos([]);
+      setCargando(false);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarCatalogo() {
@@ -35,8 +48,8 @@ export function useProductosCatalogo() {
         setError(null);
 
         const [categoriasDb, productosDb] = await Promise.all([
-          obtenerCategorias(),
-          obtenerProductos(),
+          obtenerCategorias(localIdActual),
+          obtenerProductos(localIdActual),
         ]);
 
         if (!mounted) {
@@ -64,7 +77,7 @@ export function useProductosCatalogo() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   const productosFiltrados = useMemo(
     () =>
@@ -87,6 +100,10 @@ export function useProductosCatalogo() {
   );
 
   const agregarCategoria = async (categoria: Categoria) => {
+    if (!localId) {
+      throw new Error("No hay un local activo configurado.");
+    }
+
     const nombreNormalizado = normalizarNombre(categoria.nombre);
 
     if (!nombreNormalizado) {
@@ -108,6 +125,7 @@ export function useProductosCatalogo() {
       setError(null);
       const categoriaCreada = await crearCategoria({
         ...categoria,
+        localId,
         nombre: categoria.nombre.trim(),
       });
 
@@ -123,6 +141,10 @@ export function useProductosCatalogo() {
   };
 
   const agregarProducto = async (producto: Producto) => {
+    if (!localId) {
+      throw new Error("No hay un local activo configurado.");
+    }
+
     const nombreNormalizado = normalizarNombre(producto.nombre);
 
     if (!nombreNormalizado) {
@@ -144,6 +166,7 @@ export function useProductosCatalogo() {
       setError(null);
       const productoCreado = await crearProducto({
         ...producto,
+        localId,
         nombre: producto.nombre.trim(),
       });
 

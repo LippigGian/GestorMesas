@@ -1,5 +1,17 @@
 # Gestor Mesas
 
+## Acceso y separación de cafeterías
+
+La rama integra el login con las pantallas de mesas, usuarios, roles y métricas.
+Las consultas usan la cafetería de la sesión; Supabase aplica el aislamiento con
+RLS. La migración ya fue aplicada en el proyecto actual: no volver a ejecutar
+los SQL históricos ni la unificación de datos de prueba por cambiar de rama.
+Ver `docs/aislamiento-cafeterias.md` para el estado y las verificaciones.
+
+El nombre personalizado del navbar sigue siendo una preferencia del navegador,
+ahora separada por cafetería. Si no hay un nombre guardado, muestra el del local.
+Las pantallas heredadas de usuarios y roles todavía no invitan empleados a Auth.
+
 ## Métricas
 
 La página `/metricas` permite analizar períodos de hasta 366 días, con fechas en

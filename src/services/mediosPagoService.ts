@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 type MedioPagoRow = {
   id: string;
+  local_id: string;
   nombre: string;
   activo: boolean;
 };
@@ -10,6 +11,7 @@ type MedioPagoRow = {
 function mapMedioPago(row: MedioPagoRow): MedioPago {
   return {
     id: row.id,
+    localId: row.local_id,
     nombre: row.nombre,
     activo: row.activo,
   };
@@ -23,12 +25,18 @@ export function normalizarNombreMedioPago(nombre: string) {
     .toLocaleLowerCase();
 }
 
-export async function obtenerMediosPago(): Promise<MedioPago[]> {
-  const { data, error } = await supabase
+export async function obtenerMediosPago(localId?: string): Promise<MedioPago[]> {
+  let query = supabase
     .from("medios_pago")
-    .select("id, nombre, activo")
+    .select("id, local_id, nombre, activo")
     .eq("activo", true)
     .order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -37,11 +45,17 @@ export async function obtenerMediosPago(): Promise<MedioPago[]> {
   return (data ?? []).map(mapMedioPago);
 }
 
-export async function obtenerTodosMediosPago(): Promise<MedioPago[]> {
-  const { data, error } = await supabase
+export async function obtenerTodosMediosPago(localId?: string): Promise<MedioPago[]> {
+  let query = supabase
     .from("medios_pago")
-    .select("id, nombre, activo")
+    .select("id, local_id, nombre, activo")
     .order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     if (error.code === "23505") {
@@ -54,7 +68,7 @@ export async function obtenerTodosMediosPago(): Promise<MedioPago[]> {
   return (data ?? []).map(mapMedioPago);
 }
 
-export async function crearMedioPago(nombre: string): Promise<MedioPago> {
+export async function crearMedioPago(nombre: string, localId: string): Promise<MedioPago> {
   const nombreNormalizado = nombre.trim();
 
   if (!nombreNormalizado) {
@@ -63,8 +77,8 @@ export async function crearMedioPago(nombre: string): Promise<MedioPago> {
 
   const { data, error } = await supabase
     .from("medios_pago")
-    .insert({ nombre: nombreNormalizado, activo: true })
-    .select("id, nombre, activo")
+    .insert({ local_id: localId, nombre: nombreNormalizado, activo: true })
+    .select("id, local_id, nombre, activo")
     .single();
 
   if (error) {

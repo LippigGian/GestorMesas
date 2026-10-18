@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 type CajaRow = {
   id: string;
+  local_id: string | null;
   nombre: string;
   activo: boolean;
 };
@@ -10,6 +11,7 @@ type CajaRow = {
 function mapCaja(row: CajaRow): Caja {
   return {
     id: row.id,
+    localId: row.local_id ?? undefined,
     nombre: row.nombre,
     activo: row.activo,
   };
@@ -23,11 +25,17 @@ export function normalizarNombreCaja(nombre: string) {
     .toLocaleLowerCase();
 }
 
-export async function obtenerCajas(): Promise<Caja[]> {
-  const { data, error } = await supabase
+export async function obtenerCajas(localId?: string): Promise<Caja[]> {
+  let query = supabase
     .from("cajas")
-    .select("id, nombre, activo")
+    .select("id, local_id, nombre, activo")
     .order("nombre");
+
+  if (localId) {
+    query = query.eq("local_id", localId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -36,7 +44,7 @@ export async function obtenerCajas(): Promise<Caja[]> {
   return (data ?? []).map(mapCaja);
 }
 
-export async function crearCaja(nombre: string): Promise<Caja> {
+export async function crearCaja(nombre: string, localId: string): Promise<Caja> {
   const nombreNormalizado = nombre.trim();
 
   if (!nombreNormalizado) {
@@ -45,8 +53,8 @@ export async function crearCaja(nombre: string): Promise<Caja> {
 
   const { data, error } = await supabase
     .from("cajas")
-    .insert({ nombre: nombreNormalizado, activo: true })
-    .select("id, nombre, activo")
+    .insert({ local_id: localId, nombre: nombreNormalizado, activo: true })
+    .select("id, local_id, nombre, activo")
     .single();
 
   if (error) {
@@ -71,7 +79,7 @@ export async function actualizarCaja(cajaId: string, nombre: string): Promise<Ca
     .from("cajas")
     .update({ nombre: nombreNormalizado, updated_at: new Date().toISOString() })
     .eq("id", cajaId)
-    .select("id, nombre, activo")
+    .select("id, local_id, nombre, activo")
     .single();
 
   if (error) {

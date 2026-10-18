@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLocal } from "@/context/LocalContext";
 import type { Turno } from "@/lib/types";
 import {
   activarTurno,
@@ -13,6 +14,7 @@ import {
 } from "@/services/turnosService";
 
 export function ConfiguracionTurnos() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [turnoEditando, setTurnoEditando] = useState<Turno | null>(null);
   const [nombre, setNombre] = useState("");
@@ -23,13 +25,23 @@ export function ConfiguracionTurnos() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setTurnos([]);
+      setCargando(false);
+      setError(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
     let mounted = true;
 
     async function cargarTurnos() {
       try {
         setCargando(true);
         setError(null);
-        const turnosDb = await obtenerTurnos();
+        const turnosDb = await obtenerTurnos(localIdActual);
 
         if (mounted) {
           setTurnos(turnosDb);
@@ -50,7 +62,7 @@ export function ConfiguracionTurnos() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cargandoLocal, errorLocal, localId]);
 
   const limpiarFormulario = () => {
     setTurnoEditando(null);
@@ -87,6 +99,11 @@ export function ConfiguracionTurnos() {
   };
 
   const guardarTurno = async () => {
+    if (!localId) {
+      setError("No hay un local activo configurado.");
+      return;
+    }
+
     const errorValidacion = validarFormulario();
 
     if (errorValidacion) {
@@ -105,6 +122,7 @@ export function ConfiguracionTurnos() {
             horaFin,
           })
         : await crearTurno({
+            localId,
             nombre,
             horaInicio,
             horaFin,

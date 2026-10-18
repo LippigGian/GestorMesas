@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useLocal } from "@/context/LocalContext";
 import type { Salon } from "@/lib/types";
 import { obtenerSalones } from "@/services/salonesService";
 
@@ -15,16 +16,19 @@ type SectorContextType = {
 const SectorContext = createContext<SectorContextType | undefined>(undefined);
 
 export function SectorProvider({ children }: { children: ReactNode }) {
+  const { localId, cargandoLocal } = useLocal();
   const [sectorActual, setSectorActual] = useState("salon");
   const [salones, setSalones] = useState<Salon[]>([]);
   const [cargandoSalones, setCargandoSalones] = useState(true);
   const [errorSalones, setErrorSalones] = useState<string | null>(null);
 
   const recargarSalones = async () => {
+    if (cargandoLocal) return;
+    if (!localId) { setSalones([]); setCargandoSalones(false); return; }
     try {
       setCargandoSalones(true);
       setErrorSalones(null);
-      const salonesDb = await obtenerSalones();
+      const salonesDb = await obtenerSalones(localId);
       setSalones(salonesDb);
       setSectorActual((actual) => {
         if (salonesDb.some((salon) => salon.id === actual)) {
@@ -42,7 +46,7 @@ export function SectorProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     recargarSalones();
-  }, []);
+  }, [localId, cargandoLocal]);
 
   return (
     <SectorContext.Provider

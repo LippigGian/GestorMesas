@@ -24,10 +24,11 @@ export function normalizarNombreSalon(nombre: string) {
     .toLocaleLowerCase();
 }
 
-export async function obtenerSalones(): Promise<Salon[]> {
+export async function obtenerSalones(localId: string): Promise<Salon[]> {
   const { data, error } = await supabase
     .from("salones")
     .select("id, nombre, activo")
+    .eq("local_id", localId)
     .eq("activo", true)
     .order("nombre", { ascending: true });
 

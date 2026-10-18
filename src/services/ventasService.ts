@@ -36,6 +36,7 @@ export type VentaResumen = {
 };
 
 export type ObtenerVentasFiltros = {
+  localId?: string;
   fechaDesde?: string;
   fechaHasta?: string;
   estado?: EstadoVentaFiltro;
@@ -183,6 +184,10 @@ export async function obtenerVentas(filtros: ObtenerVentasFiltros): Promise<Vent
       ].join(", ")
     )
     .order("created_at", { ascending: false });
+
+  if (filtros.localId) {
+    query = query.eq("local_id", filtros.localId);
+  }
 
   if (filtros.fechaDesde) {
     query = query.gte("created_at", new Date(`${filtros.fechaDesde}T00:00:00`).toISOString());

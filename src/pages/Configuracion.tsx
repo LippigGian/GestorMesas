@@ -17,6 +17,7 @@ import { ConfiguracionRolesUsuarios } from "@/components/configuracion/Configura
 import { ConfiguracionTurnos } from "@/components/configuracion/ConfiguracionTurnos";
 import { ConfiguracionUsuarios } from "@/components/configuracion/ConfiguracionUsuarios";
 import type { MedioPago, Proveedor } from "@/lib/types";
+import { useLocal } from "@/context/LocalContext";
 import {
   activarMedioPago,
   crearMedioPago,
@@ -92,6 +93,7 @@ const seccionesConfiguracion: ConfiguracionSeccion[] = [
 ];
 
 export function Configuracion() {
+  const { cargandoLocal, errorLocal, localId } = useLocal();
   const [seccionActivaId, setSeccionActivaId] = useState(seccionesConfiguracion[0].id);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [nuevoMedioPago, setNuevoMedioPago] = useState("");
@@ -110,6 +112,15 @@ export function Configuracion() {
 
   useEffect(() => {
     if (seccionActivaId !== "medios-pago") return;
+    if (cargandoLocal) return;
+
+    if (!localId) {
+      setMediosPago([]);
+      setErrorMediosPago(errorLocal ?? "No hay un local activo configurado.");
+      return;
+    }
+
+    const localIdActual = localId;
 
     let mounted = true;
 
@@ -117,7 +128,7 @@ export function Configuracion() {
       try {
         setCargandoMediosPago(true);
         setErrorMediosPago(null);
-        const medios = await obtenerTodosMediosPago();
+        const medios = await obtenerTodosMediosPago(localIdActual);
 
         if (mounted) {
           setMediosPago(medios);
@@ -140,10 +151,12 @@ export function Configuracion() {
     return () => {
       mounted = false;
     };
-  }, [seccionActivaId]);
+  }, [cargandoLocal, errorLocal, localId, seccionActivaId]);
 
   useEffect(() => {
     if (seccionActivaId !== "proveedores") return;
+    if (cargandoLocal || !localId) return;
+    const localIdActual = localId;
 
     let mounted = true;
 
@@ -151,7 +164,7 @@ export function Configuracion() {
       try {
         setCargandoProveedores(true);
         setErrorProveedores(null);
-        const data = await obtenerTodosProveedores();
+        const data = await obtenerTodosProveedores(localIdActual);
 
         if (mounted) {
           setProveedores(data);
@@ -174,9 +187,14 @@ export function Configuracion() {
     return () => {
       mounted = false;
     };
-  }, [seccionActivaId]);
+  }, [cargandoLocal, localId, seccionActivaId]);
 
   const agregarMedioPago = async () => {
+    if (!localId) {
+      setErrorMediosPago("No hay un local activo configurado.");
+      return;
+    }
+
     const nombreNormalizado = normalizarNombreMedioPago(nuevoMedioPago);
 
     if (!nombreNormalizado) {
@@ -196,7 +214,7 @@ export function Configuracion() {
     try {
       setGuardandoMediosPago(true);
       setErrorMediosPago(null);
-      const creado = await crearMedioPago(nuevoMedioPago);
+      const creado = await crearMedioPago(nuevoMedioPago, localId);
       setMediosPago((prev) => [...prev, creado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       setNuevoMedioPago("");
     } catch (err) {
@@ -247,6 +265,10 @@ export function Configuracion() {
   };
 
   const agregarProveedor = async () => {
+    if (!localId) {
+      setErrorProveedores("No hay un local activo configurado.");
+      return;
+    }
     let nombreValidado = "";
 
     try {
@@ -269,7 +291,7 @@ export function Configuracion() {
     try {
       setGuardandoProveedores(true);
       setErrorProveedores(null);
-      const creado = await crearProveedor(nombreValidado);
+      const creado = await crearProveedor(nombreValidado, localId);
       setProveedores((prev) =>
         [...prev, creado].sort((a, b) => a.nombre.localeCompare(b.nombre))
       );
