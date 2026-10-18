@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import './App.css'
+import { ConfiguracionGeneralProvider } from './context/ConfiguracionGeneralContext'
 import MesaManager from './pages/MesaManager'
 import { Navbar } from './components/layout/Navbar'
 import { Mostrador } from './pages/Mostrador'
@@ -33,9 +34,11 @@ function AppContent() {
 
 function App() {
   return (
+    <ConfiguracionGeneralProvider>
     <Router>
       <AppContent />
     </Router>
+    </ConfiguracionGeneralProvider>
   )
 }
 

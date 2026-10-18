@@ -128,6 +128,92 @@
   padding: 20px 32px 32px;
 }
 
+/* Navigation: business identity, primary routes, then local context. */
+.mesas-spa-theme > .app-navbar .navbar-top {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 20px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.navbar-brand-link { min-width: 0; max-width: 300px; }
+.navbar-primary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 auto; }
+.navbar-primary .navbar-link { font-size: 13px; padding-inline: 12px; }
+.navbar-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.navbar-more { position: relative; }
+.navbar-more summary {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  list-style: none;
+  cursor: pointer;
+}
+.navbar-more summary::-webkit-details-marker { display: none; }
+.navbar-more summary:hover { background: var(--secondary); }
+.navbar-more summary:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.navbar-more-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  min-width: 160px;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 24px #70412f14;
+}
+.navbar-more-panel [data-slot="button"] { width: 100%; justify-content: flex-start; }
+.mesas-spa-theme > .app-navbar .navbar-context {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.navbar-context-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.navbar-sectors { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.navbar-sector-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted-foreground); margin-right: 4px; }
+.mesas-spa-theme .navbar-sectors [data-slot="button"] { height: 34px; font-size: 12px; }
+.mesas-spa-theme .navbar-sectors [data-active="true"] { background: var(--card); color: var(--foreground); box-shadow: inset 0 0 0 1px #dfc9bd; }
+.navbar-context-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.navbar-date { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.mesas-spa-theme > .app-navbar .navbar-edit { background: #fff7f1; border: 1px solid #e4cbbf; color: var(--secondary-foreground); font-size: 12px; }
+.mesas-spa-theme > .app-navbar .navbar-edit[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.mesas-spa-theme > .app-navbar .navbar-context :is(.navbar-sector-label, .navbar-date, .navbar-date span, .navbar-sectors > span) {
+  color: var(--primary-foreground);
+}
+.mesas-spa-theme > .app-navbar .navbar-context .navbar-sectors [data-slot="button"] {
+  background: transparent;
+  color: var(--primary-foreground);
+}
+.mesas-spa-theme > .app-navbar .navbar-context .navbar-sectors [data-active="true"] {
+  background: #fce6dc;
+  color: #99402e;
+  box-shadow: none;
+}
+.mesas-spa-theme > .app-navbar .navbar-context .navbar-sectors [data-slot="button"]:hover {
+  background: #ffffff20;
+}
+.mesas-spa-theme > .app-navbar .navbar-context .navbar-sectors [data-active="true"]:hover {
+  background: #fff0e8;
+}
+.mesas-spa-theme > .app-navbar .navbar-edit[aria-pressed="true"] {
+  background: #fce6dc;
+  color: #99402e;
+  border-color: #fce6dc;
+}
+@media (max-width: 1100px) {
+  .navbar-primary { order: 3; flex-basis: 100%; margin: 0; }
+}
+@media (max-width: 640px) {
+  .navbar-brand-link { max-width: calc(100% - 140px); }
+  .navbar-context-actions { width: 100%; justify-content: space-between; }
+  .navbar-primary .navbar-link { padding-inline: 10px; }
+}
+
 .mesas-spa-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
 .mesas-spa-brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #fce6dc; color: #a74635; }
 

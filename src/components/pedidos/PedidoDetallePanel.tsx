@@ -19,6 +19,7 @@ type PedidoDetallePanelProps = {
   tituloCierre: string;
   textoBotonCerrar: string;
   menu?: ReactNode;
+  onPendientesChange?: (hayPendientes: boolean) => void;
   infoSlot?: ReactNode;
   emptyTitle: string;
   emptyDescription: string;
@@ -67,6 +68,7 @@ export function PedidoDetallePanel({
   tituloCierre,
   textoBotonCerrar,
   menu,
+  onPendientesChange,
   infoSlot,
   emptyTitle,
   emptyDescription,
@@ -83,6 +85,9 @@ export function PedidoDetallePanel({
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendienteUI[]>([]);
+  useEffect(() => {
+    onPendientesChange?.(itemsPendientes.length > 0);
+  }, [itemsPendientes.length, onPendientesChange]);
   const [productoResaltadoIndex, setProductoResaltadoIndex] = useState(0);
   const [errorPendientes, setErrorPendientes] = useState<string | null>(null);
   const [mostrandoDescuento, setMostrandoDescuento] = useState(false);

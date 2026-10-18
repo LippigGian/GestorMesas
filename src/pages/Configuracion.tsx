@@ -5,12 +5,14 @@ import {
   QrCode,
   ShieldCheck,
   Store,
+  Settings,
   UserRound,
   UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfiguracionCajas } from "@/components/configuracion/ConfiguracionCajas";
+import { ConfiguracionGeneral } from "@/components/configuracion/ConfiguracionGeneral";
 import { ConfiguracionRolesUsuarios } from "@/components/configuracion/ConfiguracionRolesUsuarios";
 import { ConfiguracionTurnos } from "@/components/configuracion/ConfiguracionTurnos";
 import { ConfiguracionUsuarios } from "@/components/configuracion/ConfiguracionUsuarios";
@@ -39,6 +41,12 @@ type ConfiguracionSeccion = {
 };
 
 const seccionesConfiguracion: ConfiguracionSeccion[] = [
+  {
+    id: "general",
+    nombre: "Configuración general",
+    descripcion: "Personalizá la identidad del negocio.",
+    icono: Settings,
+  },
   {
     id: "cajas",
     nombre: "Cajas",
@@ -344,7 +352,9 @@ export function Configuracion() {
             </div>
           </div>
 
-          {seccionActivaId === "cajas" ? (
+          {seccionActivaId === "general" ? (
+            <ConfiguracionGeneral />
+          ) : seccionActivaId === "cajas" ? (
             <ConfiguracionCajas />
           ) : seccionActivaId === "usuarios" ? (
             <ConfiguracionUsuarios />

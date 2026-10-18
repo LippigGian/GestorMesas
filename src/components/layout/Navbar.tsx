@@ -1,5 +1,9 @@
 import {
   BarChart3,
+  Coffee,
+  LayoutGrid,
+  ShoppingBag,
+  MoreHorizontal,
   Calculator,
   Clock,
   LogOut,
@@ -12,11 +16,12 @@ import {
   Users,
   UtensilsCrossed,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSector } from "@/context/SectorContext";
+import { useConfiguracionGeneral } from "@/context/ConfiguracionGeneralContext";
 import {
   actualizarSalon,
   crearSalon,
@@ -30,6 +35,30 @@ type NavbarProps = {
 };
 
 export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
+  const menuAccesosRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const cerrarAlClickFuera = (event: PointerEvent) => {
+      const menu = menuAccesosRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    };
+    const cerrarConEscape = (event: KeyboardEvent) => {
+      const menu = menuAccesosRef.current;
+      if (event.key === "Escape" && menu?.open) {
+        const focoDentro = menu.contains(document.activeElement);
+        menu.open = false;
+        if (focoDentro) menu.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", cerrarAlClickFuera);
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.removeEventListener("pointerdown", cerrarAlClickFuera);
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, []);
+  const { nombreNegocio } = useConfiguracionGeneral();
   const location = useLocation();
   const {
     sectorActual,
@@ -45,10 +74,14 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   const [guardandoSalon, setGuardandoSalon] = useState(false);
   const [errorGestionSalones, setErrorGestionSalones] = useState<string | null>(null);
 
-  const navButtonClass =
-    "text-primary-foreground hover:bg-white/10 hover:text-primary-foreground data-[active=true]:text-secondary-foreground";
-  const navIconButtonClass =
-    "text-primary-foreground transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/15 hover:text-primary-foreground hover:shadow-md hover:ring-1 hover:ring-white/25 data-[active=true]:text-secondary-foreground [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110";
+  const navButtonClass = "navbar-link";
+  const navigation = [
+    { to: "/", label: "Mesas", icon: LayoutGrid },
+    { to: "/mostrador", label: "Mostrador", icon: ShoppingBag },
+    { to: "/productos", label: "Productos", icon: UtensilsCrossed },
+    { to: "/ventas", label: "Ventas", icon: BarChart3 },
+    { to: "/gastos", label: "Gastos", icon: Calculator },
+  ];
   const salonEditando = salones.find((salon) => salon.id === salonEditandoId);
 
   const limpiarFormularioSalon = () => {
@@ -121,131 +154,51 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   };
 
   return (
-    <header className="bg-primary text-primary-foreground shadow-sm">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
-        <div className="flex items-center gap-4">
-          <Link to="/">
-              <span className="mesas-spa-brand" aria-label="Estación de café">
-                <span className="mesas-spa-brand-mark"><UtensilsCrossed aria-hidden="true" className="h-4 w-4" /></span>
-                <span>Estación de café</span>
-              </span>
-          </Link>
-
-          <Link to="/productos">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={navIconButtonClass}
-              title="Productos"
-              aria-label="Productos"
-            >
-              <UtensilsCrossed className="h-5 w-5" />
+    <header className="app-navbar">
+      <div className="navbar-top">
+        <Link to="/" className="navbar-brand-link">
+          <span className="mesas-spa-brand min-w-0" aria-label={nombreNegocio}>
+            <span className="mesas-spa-brand-mark"><Coffee aria-hidden="true" className="h-4 w-4" /></span>
+            <span className="max-w-64 truncate" title={nombreNegocio}>{nombreNegocio}</span>
+          </span>
+        </Link>
+        <nav className="navbar-primary" aria-label="Navegación principal">
+          {navigation.map(({ to, label, icon: Icon }) => (
+            <Button key={to} asChild variant="ghost" className={navButtonClass}
+              data-active={location.pathname === to}>
+              <Link to={to} aria-current={location.pathname === to ? "page" : undefined}>
+                <Icon className="h-4 w-4" aria-hidden="true" />{label}
+              </Link>
             </Button>
-          </Link>
-          <Button
-            asChild
-            variant={location.pathname === "/ventas" ? "secondary" : "ghost"}
-            size="icon"
-            className={navIconButtonClass}
-            data-active={location.pathname === "/ventas"}
-          >
-            <Link to="/ventas" title="Ventas" aria-label="Ventas">
-              <BarChart3 className="h-5 w-5" />
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={location.pathname === "/gastos" ? "secondary" : "ghost"}
-            size="icon"
-            className={navIconButtonClass}
-            data-active={location.pathname === "/gastos"}
-          >
-            <Link to="/gastos" title="Gastos" aria-label="Gastos">
-              <Calculator className="h-5 w-5" />
-            </Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={navIconButtonClass}
-            title="Usuarios"
-            aria-label="Usuarios"
-          >
-            <Users className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={navIconButtonClass}
-            title="Delivery"
-            aria-label="Delivery"
-          >
-            <Truck className="h-5 w-5" />
-          </Button>
-          <Button
-            asChild
-            variant={location.pathname === "/configuracion" ? "secondary" : "ghost"}
-            size="icon"
-            className={navIconButtonClass}
-            data-active={location.pathname === "/configuracion"}
-          >
-            <Link to="/configuracion" title="Configuracion" aria-label="Configuracion">
-              <Settings className="h-5 w-5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Estacion de cafe</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={navIconButtonClass}
-            title="Cerrar sesion"
-            aria-label="Cerrar sesion"
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-white/10 bg-primary/95 px-4 py-2">
-        <nav className="flex gap-2">
-          <Button
-            asChild
-            variant={location.pathname === "/" ? "secondary" : "ghost"}
-            className={navButtonClass}
-            data-active={location.pathname === "/"}
-          >
-            <Link to="/">Mesas</Link>
-          </Button>
-
-          <Button
-            asChild
-            variant={location.pathname === "/mostrador" ? "secondary" : "ghost"}
-            className={navButtonClass}
-            data-active={location.pathname === "/mostrador"}
-          >
-            <Link to="/mostrador">Mostrador</Link>
-          </Button>
-
-          {/* <Button variant="ghost" className={navButtonClass}>
-            Delivery
-          </Button> */}
+          ))}
         </nav>
-
-        <div className="flex items-center gap-2 text-sm text-primary-foreground/85">
-          <Clock className="h-4 w-4" />
-          <span>{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          <span>{new Date().toLocaleDateString()}</span>
+        <div className="navbar-tools">
+          <details ref={menuAccesosRef} className="navbar-more">
+            <summary aria-label="Más accesos" title="Más accesos"><MoreHorizontal className="h-5 w-5" aria-hidden="true" /></summary>
+            <div className="navbar-more-panel">
+              <Button variant="ghost" type="button"><Users className="h-4 w-4" aria-hidden="true" />Usuarios</Button>
+              <Button variant="ghost" type="button"><Truck className="h-4 w-4" aria-hidden="true" />Delivery</Button>
+            </div>
+          </details>
+          <Button asChild variant="ghost" size="icon" data-active={location.pathname === "/configuracion"}>
+            <Link to="/configuracion" title="Configuración" aria-label="Configuración"
+              aria-current={location.pathname === "/configuracion" ? "page" : undefined}>
+              <Settings className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <LogOut className="h-5 w-5" aria-hidden="true" />
+          </Button>
         </div>
       </div>
 
       {location.pathname === "/" && (
-        <div className="border-t border-white/10 bg-primary/90 px-4 py-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="navbar-context">
+          <div className="navbar-context-row">
+            <nav className="navbar-sectors" aria-label="Salones">
+              <span className="navbar-sector-label">Salones</span>
             {cargandoSalones ? (
-              <span className="px-3 py-2 text-sm text-primary-foreground/80">Cargando salones...</span>
+              <span className="px-3 py-2 text-sm text-muted-foreground">Cargando salones...</span>
             ) : salones.length > 0 ? (
               salones.map((salon) => (
                 <Button
@@ -259,9 +212,16 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
                 </Button>
               ))
             ) : (
-              <span className="px-3 py-2 text-sm text-primary-foreground/80">Sin salones</span>
+              <span className="px-3 py-2 text-sm text-muted-foreground">Sin salones</span>
             )}
-            <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary" aria-pressed={modoEdicion}>
+            </nav>
+            <div className="navbar-context-actions">
+              <span className="navbar-date"><Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <span aria-hidden="true">·</span>
+                {new Date().toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
+              </span>
+            <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary" className="navbar-edit" aria-pressed={modoEdicion}>
               {modoEdicion ? (
                 <>
                   <Save className="h-4 w-4" />
@@ -287,6 +247,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
                 Salones
               </Button>
             )}
+            </div>
           </div>
 
           {(errorSalones || (modoEdicion && mostrandoSalones)) && (

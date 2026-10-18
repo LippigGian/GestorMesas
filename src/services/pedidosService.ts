@@ -295,6 +295,30 @@ export async function moverPedidoAMesa(
   return mapPedido(data);
 }
 
+export async function moverPedidoMostradorAMesa(
+  pedidoId: string,
+  mesaDestinoId: string,
+  personas: number
+): Promise<Pedido> {
+  if (!pedidoId || !mesaDestinoId) throw new Error("Seleccioná un pedido y una mesa.");
+  if (!Number.isInteger(personas) || personas < 1 || personas > 2147483647) {
+    throw new Error("Ingresá una cantidad entera de personas mayor a cero.");
+  }
+  const { data, error } = await supabase.rpc("mover_pedido_mostrador_a_mesa", {
+    p_pedido_id: pedidoId,
+    p_mesa_id: mesaDestinoId,
+    p_personas: personas,
+  }).single();
+  if (error) {
+    if (error.code === "PGRST202") {
+      throw new Error("Falta habilitar el traslado en Supabase: ejecutá supabase_mover_mostrador_a_mesa.sql en el SQL Editor.");
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error("No se pudo confirmar el traslado del pedido.");
+  return mapPedido(data as PedidoRow);
+}
+
 export async function juntarPedidosMesa(
   pedidoOrigenId: string,
   pedidoDestinoId: string

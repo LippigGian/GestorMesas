@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PedidoDetallePanel } from '@/components/pedidos/PedidoDetallePanel';
+import { MoverMostradorAMesaDialog } from '@/components/pedidos/MoverMostradorAMesaDialog';
 import type { Pedido, PedidoItem } from '@/lib/types';
 import {
   actualizarCantidadItemPedido,
@@ -13,6 +14,7 @@ import {
   eliminarItemPedido,
   obtenerItemsPedido,
   obtenerPedidosMostradorAbiertos,
+  moverPedidoMostradorAMesa,
   registrarPagoParcialPedido,
   type ItemCobroParcialInput,
   type PagoPedidoInput,
@@ -45,6 +47,29 @@ export function Mostrador() {
   const [cargandoPedidos, setCargandoPedidos] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [menuPedidoAbierto, setMenuPedidoAbierto] = useState(false);
+  const menuPedidoRef = useRef<HTMLDivElement>(null);
+  const [mostrandoMover, setMostrandoMover] = useState(false);
+  const [hayPendientes, setHayPendientes] = useState(false);
+  const [aviso, setAviso] = useState('');
+
+  useEffect(() => {
+    if (!menuPedidoAbierto) return;
+    const cerrarFuera = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuPedidoRef.current?.contains(event.target)) setMenuPedidoAbierto(false);
+    };
+    const cerrarEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuPedidoAbierto(false);
+        menuPedidoRef.current?.querySelector('button')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', cerrarFuera);
+    document.addEventListener('keydown', cerrarEscape);
+    return () => {
+      document.removeEventListener('pointerdown', cerrarFuera);
+      document.removeEventListener('keydown', cerrarEscape);
+    };
+  }, [menuPedidoAbierto]);
   const [errorMostrador, setErrorMostrador] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +108,23 @@ export function Mostrador() {
     setPedidoSeleccionado(pedido);
     setCliente(pedido.cliente ?? '');
     setPedidos((prev) => prev.map((item) => (item.id === pedido.id ? pedido : item)));
+  };
+
+  const moverAMesa = async (mesaId: string, personas: number) => {
+    if (!pedidoSeleccionado) throw new Error('Seleccioná un pedido.');
+    if (hayPendientes) throw new Error('Confirmá o cancelá los productos pendientes antes de mover el pedido.');
+    const pedidoId = pedidoSeleccionado.id;
+    setGuardando(true);
+    try {
+      await moverPedidoMostradorAMesa(pedidoId, mesaId, personas);
+      setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoId));
+      setPedidoSeleccionado(null);
+      setPedidoItems([]);
+      setCliente('');
+      setMenuPedidoAbierto(false);
+      setErrorMostrador(null);
+      setAviso('Pedido trasladado. Podés continuar desde la mesa en la pantalla Mesas.');
+    } finally { setGuardando(false); }
   };
 
   const actualizarTotalPedidoActivo = (items: PedidoItem[]) => {
@@ -241,6 +283,7 @@ export function Mostrador() {
           {errorMostrador}
         </div>
       )}
+      {aviso && <p role="status" className="mb-4 rounded-md border bg-muted/40 p-3 text-sm">{aviso}</p>}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <section className="min-w-0 flex-1 overflow-hidden rounded-lg border bg-card shadow-sm">
@@ -279,6 +322,7 @@ export function Mostrador() {
         </section>
 
         <PedidoDetallePanel
+          onPendientesChange={setHayPendientes}
           pedido={pedidoSeleccionado}
           pedidoItems={pedidoItems}
           titulo={pedidoSeleccionado ? crearTituloPedido(pedidoSeleccionado) : 'Mostrador'}
@@ -310,12 +354,14 @@ export function Mostrador() {
           }
           menu={
             pedidoSeleccionado ? (
-              <div className="relative">
+              <div ref={menuPedidoRef} className="relative">
                 <Button
                   className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
                   size="sm"
                   type="button"
                   variant="ghost"
+                  aria-expanded={menuPedidoAbierto}
+                  aria-controls="menu-pedido-mostrador"
                   onClick={() => setMenuPedidoAbierto((prev) => !prev)}
                 >
                   <ArrowRightLeft className="h-4 w-4" />
@@ -324,15 +370,16 @@ export function Mostrador() {
                 </Button>
 
                 {menuPedidoAbierto && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-md border bg-card text-card-foreground shadow-lg">
+                  <div id="menu-pedido-mostrador" className="absolute right-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-md border bg-card text-card-foreground shadow-lg">
                     <button
-                      className="w-full px-3 py-2 text-left text-sm text-muted-foreground"
-                      disabled
-                      title="Disponible mas adelante"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                      disabled={guardando || hayPendientes}
                       type="button"
+                      onClick={() => { setMenuPedidoAbierto(false); setMostrandoMover(true); }}
                     >
                       Mover pedido a mesa
                     </button>
+                    {hayPendientes && <p className="px-3 pb-3 text-xs text-muted-foreground">Confirmá o cancelá los productos pendientes antes de mover el pedido.</p>}
                   </div>
                 )}
               </div>
@@ -345,6 +392,7 @@ export function Mostrador() {
           onEliminarItem={eliminarItem}
         />
       </div>
+      <MoverMostradorAMesaDialog open={mostrandoMover} onOpenChange={setMostrandoMover} onConfirmar={moverAMesa} />
     </main>
   );
 }
