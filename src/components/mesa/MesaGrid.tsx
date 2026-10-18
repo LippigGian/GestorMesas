@@ -381,7 +381,8 @@
 // }
 // export default MesaGrid;
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { crearControlSeleccion } from '@/lib/controlSeleccion';
 import { MesaCard } from './MesaCard';
 import { MesaDialog } from './MesaDialog';
 import { MesaDetalleDialog } from './MesaDetalleDialog';
@@ -405,6 +406,7 @@ import {
   aplicarDescuentoPedido,
   confirmarProductosPedido,
   cerrarPedido,
+  cancelarPedido,
   crearPedidoMesa,
   eliminarItemPedido,
   juntarPedidosMesa,
@@ -506,7 +508,17 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
   const [numeroMesa, setNumeroMesa] = useState('');
   const [forma, setForma] = useState<'cuadrada' | 'redonda'>('cuadrada');
   const [sectorMesa, setSectorMesa] = useState(sectorActual);
-  const [mesaSeleccionada, setMesaSeleccionada] = useState<Mesa | null>(null);
+  const [mesaSeleccionada, setMesaSeleccionadaState] = useState<Mesa | null>(null);
+  const controlSeleccion = useRef(crearControlSeleccion());
+  const mesaVisibleId = useRef<string | null>(null);
+  const setMesaSeleccionada = (mesa: Mesa | null) => {
+    if (mesaVisibleId.current !== (mesa?.id ?? null)) {
+      controlSeleccion.current.cambiar();
+      mesaVisibleId.current = mesa?.id ?? null;
+    }
+    setMesaSeleccionadaState(mesa);
+  };
+  useEffect(() => () => { controlSeleccion.current.cambiar(); }, []);
   const [pedidoActivo, setPedidoActivo] = useState<Pedido | null>(null);
   const [pedidoItems, setPedidoItems] = useState<PedidoItem[]>([]);
   const [cargandoMesas, setCargandoMesas] = useState(true);
@@ -607,9 +619,13 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
   };
 
   const refrescarPedidoMesaSeleccionada = async (mesa: Mesa) => {
+    const sigueVigente = controlSeleccion.current.capturar();
     const pedido = await obtenerPedidoAbiertoPorMesa(mesa.id);
+    if (!sigueVigente()) return;
+    const items = pedido ? await obtenerItemsPedido(pedido.id) : [];
+    if (!sigueVigente()) return;
     setPedidoActivo(pedido);
-    setPedidoItems(pedido ? await obtenerItemsPedido(pedido.id) : []);
+    setPedidoItems(items);
   };
 
   const handleAbrirDialogo = (index: number) => {
@@ -711,7 +727,9 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
   };
 
   const abrirMesa = async (mesa: Mesa) => {
+    controlSeleccion.current.cambiar();
     setMesaSeleccionada(mesa);
+    const sigueVigente = controlSeleccion.current.capturar();
     setPedidoActivo(null);
     setPedidoItems([]);
 
@@ -723,7 +741,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
       setErrorMesas(null);
       await refrescarPedidoMesaSeleccionada(mesa);
     } catch (err) {
-      setErrorMesas(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
+      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
     }
   };
 
@@ -885,6 +903,16 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     }
   };
 
+  const cancelarPedidoMesa = async () => {
+    if (!mesaSeleccionada || !pedidoActivo) throw new Error('No hay un pedido activo para cancelar.');
+    await cancelarPedido(pedidoActivo.id);
+    actualizarMesaEnSectores({ ...mesaSeleccionada, estado: 'libre', personas: 0, productos: [] });
+    setMesaSeleccionada(null);
+    setPedidoActivo(null);
+    setPedidoItems([]);
+    setErrorMesas(null);
+  };
+
   const cerrarMesa = async (pagos: PagoPedidoInput[]) => {
     if (!mesaSeleccionada) return;
     try {
@@ -926,10 +954,12 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
   const confirmarProductosMesa = async (productos: ProductoPendientePedido[]) => {
     if (!pedidoActivo) return;
+    const sigueVigente = controlSeleccion.current.capturar();
 
     try {
       setErrorMesas(null);
       const items = await confirmarProductosPedido(pedidoActivo.id, productos);
+      if (!sigueVigente()) return;
       setPedidoItems(items);
       setPedidoActivo((prev) =>
         prev
@@ -940,11 +970,10 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
           : prev
       );
     } catch (err) {
-      setErrorMesas(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
+      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
       throw err;
     }
   };
-
   const actualizarTotalPedidoActivo = (items: PedidoItem[]) => {
     setPedidoItems(items);
     setPedidoActivo((prev) =>
@@ -959,43 +988,46 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
   const actualizarCantidadPedidoItem = async (item: PedidoItem, cantidad: number) => {
     if (!pedidoActivo) return;
+    const sigueVigente = controlSeleccion.current.capturar();
 
     try {
       setErrorMesas(null);
       const items = await actualizarCantidadItemPedido(pedidoActivo.id, item, cantidad);
+      if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
-      setErrorMesas(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
+      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
       throw err;
     }
   };
-
   const eliminarPedidoItem = async (itemId: string) => {
     if (!pedidoActivo) return;
+    const sigueVigente = controlSeleccion.current.capturar();
 
     try {
       setErrorMesas(null);
       const items = await eliminarItemPedido(pedidoActivo.id, itemId);
+      if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
-      setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
+      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
       throw err;
     }
   };
-
   const aplicarDescuento = async (descuento: DescuentoPedidoInput) => {
     if (!pedidoActivo) return;
+    const sigueVigente = controlSeleccion.current.capturar();
 
     try {
       setErrorMesas(null);
       const items = await aplicarDescuentoPedido(pedidoActivo.id, descuento);
+      if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
-      setErrorMesas(err instanceof Error ? err.message : 'No se pudo aplicar el descuento');
+      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo aplicar el descuento');
       throw err;
     }
   };
-
   const mesaActual: Mesa | null = mesaSeleccionada ?? null;
   const cambiarCantidadFilas = (value: number) => {
     setCantidadFilas(Math.max(normalizarDimension(value), dimensionesMinimas.filas));
@@ -1153,6 +1185,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
       </section>
 
       <MesaDetalleDialog
+        key={mesaActual?.id ?? 'sin-mesa'}
         mesa={mesaActual}
         mesasDisponibles={mesasDisponibles}
         pedido={pedidoActivo}
@@ -1165,6 +1198,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         onMoverMesa={moverMesa}
         onCobroParcial={registrarCobroParcialMesa}
         onCerrarMesa={cerrarMesa}
+        onCancelarPedido={cancelarPedidoMesa}
         onAplicarDescuento={aplicarDescuento}
       />
     </div>

@@ -319,6 +319,17 @@ export async function moverPedidoMostradorAMesa(
   return mapPedido(data as PedidoRow);
 }
 
+export async function cancelarPedido(pedidoId: string): Promise<Pedido> {
+  if (!pedidoId) throw new Error("Seleccioná un pedido.");
+  const { data, error } = await supabase.rpc("cancelar_pedido", { p_pedido_id: pedidoId }).single();
+  if (error) {
+    if (error.code === "PGRST202") throw new Error("Falta habilitar la cancelación: ejecutá supabase_cancelar_pedido.sql en Supabase.");
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error("No se pudo confirmar la cancelación.");
+  return mapPedido(data as PedidoRow);
+}
+
 export async function juntarPedidosMesa(
   pedidoOrigenId: string,
   pedidoDestinoId: string

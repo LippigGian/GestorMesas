@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PedidoDetallePanel } from '@/components/pedidos/PedidoDetallePanel';
 import { MoverMostradorAMesaDialog } from '@/components/pedidos/MoverMostradorAMesaDialog';
+import { CancelarPedidoDialog } from '@/components/pedidos/CancelarPedidoDialog';
 import type { Pedido, PedidoItem } from '@/lib/types';
+import { crearControlSeleccion } from '@/lib/controlSeleccion';
 import {
   actualizarCantidadItemPedido,
   actualizarClientePedido,
@@ -15,6 +17,7 @@ import {
   obtenerItemsPedido,
   obtenerPedidosMostradorAbiertos,
   moverPedidoMostradorAMesa,
+  cancelarPedido,
   registrarPagoParcialPedido,
   type ItemCobroParcialInput,
   type PagoPedidoInput,
@@ -41,7 +44,18 @@ function crearTituloPedido(pedido: Pedido) {
 
 export function Mostrador() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
+  const [pedidoSeleccionado, setPedidoSeleccionadoState] = useState<Pedido | null>(null);
+  const controlSeleccion = useRef(crearControlSeleccion());
+  const pedidoVisibleId = useRef<string | null>(null);
+  const setPedidoSeleccionado = (pedido: Pedido | null) => {
+    if (pedidoVisibleId.current !== (pedido?.id ?? null)) {
+      controlSeleccion.current.cambiar();
+      pedidoVisibleId.current = pedido?.id ?? null;
+      setGuardando(false);
+    }
+    setPedidoSeleccionadoState(pedido);
+  };
+  useEffect(() => () => { controlSeleccion.current.cambiar(); }, []);
   const [pedidoItems, setPedidoItems] = useState<PedidoItem[]>([]);
   const [cliente, setCliente] = useState('');
   const [cargandoPedidos, setCargandoPedidos] = useState(true);
@@ -49,6 +63,7 @@ export function Mostrador() {
   const [menuPedidoAbierto, setMenuPedidoAbierto] = useState(false);
   const menuPedidoRef = useRef<HTMLDivElement>(null);
   const [mostrandoMover, setMostrandoMover] = useState(false);
+  const [mostrandoCancelar, setMostrandoCancelar] = useState(false);
   const [hayPendientes, setHayPendientes] = useState(false);
   const [aviso, setAviso] = useState('');
 
@@ -104,113 +119,136 @@ export function Mostrador() {
     };
   }, []);
 
-  const actualizarPedidoSeleccionado = (pedido: Pedido) => {
+  const actualizarPedidoSeleccionado = (pedido: Pedido, sigueVigente: () => boolean) => {
+    setPedidos((prev) => prev.map((item) => (item.id === pedido.id ? pedido : item)));
+    if (!sigueVigente()) return;
     setPedidoSeleccionado(pedido);
     setCliente(pedido.cliente ?? '');
-    setPedidos((prev) => prev.map((item) => (item.id === pedido.id ? pedido : item)));
   };
 
   const moverAMesa = async (mesaId: string, personas: number) => {
     if (!pedidoSeleccionado) throw new Error('Seleccioná un pedido.');
     if (hayPendientes) throw new Error('Confirmá o cancelá los productos pendientes antes de mover el pedido.');
     const pedidoId = pedidoSeleccionado.id;
+    const sigueVigente = controlSeleccion.current.capturar();
     setGuardando(true);
     try {
       await moverPedidoMostradorAMesa(pedidoId, mesaId, personas);
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoId));
+      if (!sigueVigente()) return;
       setPedidoSeleccionado(null);
       setPedidoItems([]);
       setCliente('');
       setMenuPedidoAbierto(false);
       setErrorMostrador(null);
       setAviso('Pedido trasladado. Podés continuar desde la mesa en la pantalla Mesas.');
-    } finally { setGuardando(false); }
+    } finally { if (sigueVigente()) setGuardando(false); }
   };
-
-  const actualizarTotalPedidoActivo = (items: PedidoItem[]) => {
+  const cancelarPedidoActivo = async () => {
+    if (!pedidoSeleccionado) throw new Error('Seleccioná un pedido.');
+    const id = pedidoSeleccionado.id;
+    const sigueVigente = controlSeleccion.current.capturar();
+    setGuardando(true);
+    try {
+      await cancelarPedido(id);
+      setPedidos((prev) => prev.filter((pedido) => pedido.id !== id));
+      if (!sigueVigente()) return;
+      setPedidoSeleccionado(null);
+      setPedidoItems([]);
+      setCliente('');
+      setMenuPedidoAbierto(false);
+      setErrorMostrador(null);
+      setAviso('Pedido guardado en el historial como Cancelada.');
+    } finally { if (sigueVigente()) setGuardando(false); }
+  };
+  const actualizarTotalPedidoActivo = (pedidoId: string, items: PedidoItem[], sigueVigente: () => boolean) => {
+    const total = items.reduce((acc, item) => acc + item.subtotal, 0);
+    setPedidos((prev) => prev.map((pedido) => pedido.id === pedidoId ? { ...pedido, total } : pedido));
+    if (!sigueVigente()) return;
     setPedidoItems(items);
-    setPedidoSeleccionado((prev) => {
-      if (!prev) return prev;
-
-      const actualizado = {
-        ...prev,
-        total: items.reduce((acc, item) => acc + item.subtotal, 0),
-      };
-      setPedidos((pedidosPrevios) =>
-        pedidosPrevios.map((pedido) => (pedido.id === actualizado.id ? actualizado : pedido))
-      );
-      return actualizado;
-    });
+    setPedidoSeleccionadoState((prev) => prev?.id === pedidoId ? { ...prev, total } : prev);
   };
 
   const seleccionarPedido = async (pedido: Pedido) => {
+    controlSeleccion.current.cambiar();
+    setPedidoSeleccionado(pedido);
+    const sigueVigente = controlSeleccion.current.capturar();
+    setPedidoItems([]);
+    setGuardando(false);
+    setAviso('');
     try {
       setErrorMostrador(null);
       setPedidoSeleccionado(pedido);
       setCliente(pedido.cliente ?? '');
       setMenuPedidoAbierto(false);
-      setPedidoItems(await obtenerItemsPedido(pedido.id));
+      const items = await obtenerItemsPedido(pedido.id);
+      if (sigueVigente()) setPedidoItems(items);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo cargar el pedido');
     }
   };
 
   const crearNuevoPedido = async () => {
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setGuardando(true);
       setErrorMostrador(null);
       const pedido = await crearPedidoMostrador();
       setPedidos((prev) => [pedido, ...prev]);
+      if (!sigueVigente()) return;
       setPedidoSeleccionado(pedido);
       setPedidoItems([]);
       setMenuPedidoAbierto(false);
       setCliente('');
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo crear el pedido');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo crear el pedido');
     } finally {
-      setGuardando(false);
+      if (sigueVigente()) setGuardando(false);
     }
   };
 
   const guardarCliente = async () => {
     if (!pedidoSeleccionado) return;
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      actualizarPedidoSeleccionado(await actualizarClientePedido(pedidoSeleccionado.id, cliente));
+      actualizarPedidoSeleccionado(await actualizarClientePedido(pedidoSeleccionado.id, cliente), sigueVigente);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo guardar el cliente');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo guardar el cliente');
     } finally {
-      setGuardando(false);
+      if (sigueVigente()) setGuardando(false);
     }
   };
 
   const confirmarProductos = async (productos: ProductoPendientePedido[]) => {
     if (!pedidoSeleccionado || productos.length === 0) return;
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setGuardando(true);
       setErrorMostrador(null);
       const items = await confirmarProductosPedido(pedidoSeleccionado.id, productos);
-      actualizarTotalPedidoActivo(items);
+      actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
       throw err;
     } finally {
-      setGuardando(false);
+      if (sigueVigente()) setGuardando(false);
     }
   };
 
   const cambiarCantidadItem = async (item: PedidoItem, cantidad: number) => {
     if (!pedidoSeleccionado) return;
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setErrorMostrador(null);
       const items = await actualizarCantidadItemPedido(pedidoSeleccionado.id, item, cantidad);
-      actualizarTotalPedidoActivo(items);
+      actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
       throw err;
     }
   };
@@ -218,12 +256,13 @@ export function Mostrador() {
   const eliminarItem = async (itemId: string) => {
     if (!pedidoSeleccionado) return;
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setErrorMostrador(null);
       const items = await eliminarItemPedido(pedidoSeleccionado.id, itemId);
-      actualizarTotalPedidoActivo(items);
+      actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
       throw err;
     }
   };
@@ -233,22 +272,23 @@ export function Mostrador() {
       return;
     }
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setGuardando(true);
       setErrorMostrador(null);
       await cerrarPedido(pedidoSeleccionado.id, pagos);
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
+      if (!sigueVigente()) return;
       setPedidoSeleccionado(null);
       setPedidoItems([]);
       setMenuPedidoAbierto(false);
       setCliente('');
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo finalizar el pedido');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo finalizar el pedido');
     } finally {
-      setGuardando(false);
+      if (sigueVigente()) setGuardando(false);
     }
   };
-
   const registrarCobroParcial = async (
     pagos: PagoPedidoInput[],
     itemsCobrados: ItemCobroParcialInput[] = []
@@ -257,15 +297,16 @@ export function Mostrador() {
       return;
     }
 
+    const sigueVigente = controlSeleccion.current.capturar();
     try {
       setGuardando(true);
       setErrorMostrador(null);
       await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos, itemsCobrados);
     } catch (err) {
-      setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
+      if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;
     } finally {
-      setGuardando(false);
+      if (sigueVigente()) setGuardando(false);
     }
   };
 
@@ -322,6 +363,7 @@ export function Mostrador() {
         </section>
 
         <PedidoDetallePanel
+          key={pedidoSeleccionado?.id ?? 'sin-pedido'}
           onPendientesChange={setHayPendientes}
           pedido={pedidoSeleccionado}
           pedidoItems={pedidoItems}
@@ -380,6 +422,9 @@ export function Mostrador() {
                       Mover pedido a mesa
                     </button>
                     {hayPendientes && <p className="px-3 pb-3 text-xs text-muted-foreground">Confirmá o cancelá los productos pendientes antes de mover el pedido.</p>}
+                    <button type="button" disabled={guardando}
+                      className="w-full border-t px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                      onClick={() => { setMenuPedidoAbierto(false); setMostrandoCancelar(true); }}>Eliminar pedido</button>
                   </div>
                 )}
               </div>
@@ -393,6 +438,7 @@ export function Mostrador() {
         />
       </div>
       <MoverMostradorAMesaDialog open={mostrandoMover} onOpenChange={setMostrandoMover} onConfirmar={moverAMesa} />
+      <CancelarPedidoDialog open={mostrandoCancelar} onOpenChange={setMostrandoCancelar} onConfirmar={cancelarPedidoActivo} />
     </main>
   );
 }

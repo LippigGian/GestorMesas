@@ -3,6 +3,7 @@ import { ChevronDown, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PedidoDetallePanel } from "@/components/pedidos/PedidoDetallePanel";
+import { CancelarPedidoDialog } from "@/components/pedidos/CancelarPedidoDialog";
 import type { Mesa, Pedido, PedidoItem } from "@/lib/types";
 import type {
   DescuentoPedidoInput,
@@ -27,6 +28,7 @@ type Props = {
     itemsCobrados?: ItemCobroParcialInput[]
   ) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onCancelarPedido: () => Promise<void>;
   onAplicarDescuento: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };
 
@@ -43,6 +45,7 @@ export function MesaDetalleDialog({
   onMoverMesa,
   onCobroParcial,
   onCerrarMesa,
+  onCancelarPedido,
   onAplicarDescuento,
 }: Props) {
   const cantidadPersonasInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +54,7 @@ export function MesaDetalleDialog({
   const [confirmandoOcupacion, setConfirmandoOcupacion] = useState(false);
   const [guardandoMesa, setGuardandoMesa] = useState(false);
   const [menuMesaAbierto, setMenuMesaAbierto] = useState(false);
+  const [mostrandoCancelar, setMostrandoCancelar] = useState(false);
   const [editandoMesa, setEditandoMesa] = useState(false);
   const [moviendoMesa, setMoviendoMesa] = useState(false);
   const [mesaDestinoId, setMesaDestinoId] = useState("");
@@ -150,6 +154,7 @@ export function MesaDetalleDialog({
 
   if (!mesa || mesa.estado === "ocupada") {
     return (
+      <>
       <PedidoDetallePanel
         pedido={pedido}
         pedidoItems={pedidoItems}
@@ -295,6 +300,11 @@ export function MesaDetalleDialog({
                   >
                     Mover mesa
                   </button>
+                  <button type="button" disabled={!pedido || guardandoMesa}
+                    className="w-full border-t px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                    onClick={() => { setMenuMesaAbierto(false); setMostrandoCancelar(true); }}>
+                    Eliminar pedido
+                  </button>
                 </div>
               )}
             </div>
@@ -307,6 +317,8 @@ export function MesaDetalleDialog({
         onConfirmarProductos={onConfirmarProductos}
         onEliminarItem={onEliminarItem}
       />
+      <CancelarPedidoDialog open={mostrandoCancelar} onOpenChange={setMostrandoCancelar} onConfirmar={onCancelarPedido} />
+      </>
     );
   }
 

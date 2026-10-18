@@ -1073,7 +1073,7 @@ function VentaDetalle({
     <aside className="p-6">
       <h2 className="mb-4 text-xl font-bold">Detalle de venta</h2>
       <div className="space-y-3 rounded-md border bg-card p-4 text-sm shadow-sm">
-        <DetalleDato label="Estado" value={venta.estado === "abierto" ? "En curso" : venta.estado} />
+        <DetalleDato label="Estado" value={venta.estado === "abierto" ? "En curso" : venta.estado === "cancelado" ? "Cancelada" : "Cerrada"} />
         <DetalleDato label="Tipo" value={venta.tipo === "mesa" ? "Mesa" : "Mostrador"} />
         <DetalleDato
           label="Mesa"
