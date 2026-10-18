@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { esEnlaceRecuperacion, urlRecuperacion, validarNuevaPassword } from "@/lib/recuperacionPassword";
+import { AVISO_REGISTRO_PENDIENTE, errorRegistroCuenta } from "@/lib/registroCuenta";
 
 type AuthContextType = {
   user: User | null;
@@ -9,6 +11,9 @@ type AuthContextType = {
   iniciarSesion: (email: string, password: string) => Promise<void>;
   crearCuenta: (email: string, password: string, nombreLocal: string) => Promise<string | null>;
   recuperarPassword: (email: string) => Promise<void>;
+  recuperandoPassword: boolean;
+  actualizarPassword: (password: string) => Promise<void>;
+  finalizarRecuperacion: () => void;
   cerrarSesion: () => Promise<void>;
 };
 
@@ -17,6 +22,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
+  const [recuperandoPassword, setRecuperandoPassword] = useState(() => esEnlaceRecuperacion(window.location.hash));
 
   useEffect(() => {
     let mounted = true;
@@ -37,7 +43,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     cargarSesion();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nuevaSesion) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nuevaSesion) => {
+      if (!mounted) return;
+      if (event === "PASSWORD_RECOVERY") setRecuperandoPassword(true);
+      if (event === "SIGNED_OUT") setRecuperandoPassword(false);
       setSession(nuevaSesion);
       setCargandoAuth(false);
     });
@@ -60,87 +69,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function crearCuenta(email: string, password: string, nombreLocal: string) {
+    const nombre = nombreLocal.trim();
+    if (!nombre || nombre.length > 100) {
+      throw new Error("El nombre del negocio debe tener entre 1 y 100 caracteres.");
+    }
+    const errorPassword = validarNuevaPassword(password, password);
+    if (errorPassword) throw new Error(errorPassword);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          nombre_local: nombreLocal,
+          nombre_local: nombre,
         },
       },
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (!data.user) {
-      return "Cuenta creada. Revisa tu email para confirmar el acceso.";
-    }
+    // Supabase crea la cafetería y su administrador dentro de la transacción
+    // de auth.users. El navegador nunca asigna locales ni roles.
+    const errorRegistro = errorRegistroCuenta(error, data.user, Boolean(data.session));
+    if (errorRegistro) throw new Error(errorRegistro);
 
     if (!data.session) {
-      return "Cuenta creada. Si Supabase pide confirmar email, confirma la cuenta y luego asocia el usuario al local.";
-    }
-
-    const { data: localExistente, error: localExistenteError } = await supabase
-      .from("locales")
-      .select("id")
-      .eq("activo", true)
-      .order("created_at")
-      .limit(1)
-      .maybeSingle();
-
-    if (localExistenteError) {
-      throw new Error(localExistenteError.message);
-    }
-
-    let localId = localExistente?.id;
-
-    if (!localId) {
-      const { data: localNuevo, error: localError } = await supabase
-        .from("locales")
-        .insert({ nombre: nombreLocal, activo: true })
-        .select("id")
-        .single();
-
-      if (localError) {
-        throw new Error(localError.message);
-      }
-
-      localId = localNuevo.id;
-    }
-
-    const { data: relacionExistente, error: relacionExistenteError } = await supabase
-      .from("usuarios_locales")
-      .select("id")
-      .eq("user_id", data.user.id)
-      .eq("local_id", localId)
-      .maybeSingle();
-
-    if (relacionExistenteError) {
-      throw new Error(relacionExistenteError.message);
-    }
-
-    if (!relacionExistente) {
-      const { error: relacionError } = await supabase.from("usuarios_locales").insert({
-        user_id: data.user.id,
-        local_id: localId,
-        email: data.user.email ?? email,
-        nombre: data.user.email ?? email,
-        rol: "admin",
-        activo: true,
-      });
-
-      if (relacionError) {
-        throw new Error(relacionError.message);
-      }
+      return AVISO_REGISTRO_PENDIENTE;
     }
 
     return null;
   }
 
   async function recuperarPassword(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: urlRecuperacion(window.location.origin),
+    });
 
     if (error) {
       throw new Error(error.message);
@@ -155,6 +115,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function actualizarPassword(password: string) {
+    const mensaje = validarNuevaPassword(password, password);
+    if (mensaje) throw new Error(mensaje);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+  }
+
   const value = useMemo<AuthContextType>(
     () => ({
       user: session?.user ?? null,
@@ -163,9 +130,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       iniciarSesion,
       crearCuenta,
       recuperarPassword,
+      recuperandoPassword,
+      actualizarPassword,
+      finalizarRecuperacion: () => setRecuperandoPassword(false),
       cerrarSesion,
     }),
-    [cargandoAuth, session]
+    [cargandoAuth, session, recuperandoPassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

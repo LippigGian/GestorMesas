@@ -14,6 +14,15 @@ const LocalContext = createContext<LocalContextType | undefined>(undefined);
 
 export function LocalProvider({ children }: { children: React.ReactNode }) {
   const { cargandoAuth, user } = useAuth();
+  // Cambiar de cuenta desmonta el catálogo y las pantallas de la anterior.
+  return <LocalDelUsuarioProvider key={user?.id ?? "sin-sesion"} usuarioId={user?.id ?? null} cargandoAuth={cargandoAuth}>{children}</LocalDelUsuarioProvider>;
+}
+
+function LocalDelUsuarioProvider({ children, usuarioId, cargandoAuth }: {
+  children: React.ReactNode;
+  usuarioId: string | null;
+  cargandoAuth: boolean;
+}) {
   const [local, setLocal] = useState<Local | null>(null);
   const [cargandoLocal, setCargandoLocal] = useState(true);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
@@ -24,7 +33,7 @@ export function LocalProvider({ children }: { children: React.ReactNode }) {
     async function cargarLocal() {
       if (cargandoAuth) return;
 
-      if (!user) {
+      if (!usuarioId) {
         setLocal(null);
         setErrorLocal(null);
         setCargandoLocal(false);
@@ -34,7 +43,7 @@ export function LocalProvider({ children }: { children: React.ReactNode }) {
       try {
         setCargandoLocal(true);
         setErrorLocal(null);
-        const localActivo = await obtenerLocalDelUsuario(user.id);
+        const localActivo = await obtenerLocalDelUsuario(usuarioId);
 
         if (!mounted) return;
 
@@ -44,6 +53,7 @@ export function LocalProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         if (mounted) {
+          setLocal(null);
           setErrorLocal(err instanceof Error ? err.message : "No se pudo cargar el local.");
         }
       } finally {
@@ -58,7 +68,7 @@ export function LocalProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [cargandoAuth, user]);
+  }, [cargandoAuth, usuarioId]);
 
   return (
     <LocalContext.Provider

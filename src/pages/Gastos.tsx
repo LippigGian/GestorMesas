@@ -153,7 +153,7 @@ export function Gastos() {
       const [gastosDb, mediosDb, proveedoresDb] = await Promise.all([
         obtenerGastos({ localId, fechaDesde, fechaHasta }),
         obtenerMediosPago(localId),
-        obtenerProveedores(),
+        obtenerProveedores(localId),
       ]);
       setGastos(gastosDb);
       setMediosPago(mediosDb);

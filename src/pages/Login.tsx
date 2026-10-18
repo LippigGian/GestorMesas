@@ -1,14 +1,19 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, LockKeyhole, Mail, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
+import { validarNuevaPassword } from "@/lib/recuperacionPassword";
+import { PasswordRequisitos } from "@/components/ui/password-requisitos";
+import "./Login.css";
 
 type LoginMode = "login" | "register" | "recover";
 
 export function Login() {
   const { crearCuenta, iniciarSesion, recuperarPassword } = useAuth();
-  const [mode, setMode] = useState<LoginMode>("login");
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState<LoginMode>(() => params.get("recuperar") === "1" ? "recover" : "login");
   const [showPassword, setShowPassword] = useState(false);
   const [nombreLocal, setNombreLocal] = useState("");
   const [email, setEmail] = useState("");
@@ -23,7 +28,7 @@ export function Login() {
     mode === "login"
       ? "Accede al sistema con tu email."
       : mode === "register"
-        ? "Crea el usuario principal y su local."
+        ? "Crea tu cafetería independiente y tu cuenta de administrador."
         : "Indica tu email para recibir instrucciones de recuperacion.";
 
   function cambiarModo(nuevoModo: LoginMode) {
@@ -55,13 +60,9 @@ export function Login() {
         return;
       }
 
-      if (password.length < 6) {
-        setError("La contrasena debe tener al menos 6 caracteres.");
-        return;
-      }
-
-      if (password !== passwordConfirmacion) {
-        setError("Las contrasenas no coinciden.");
+      const errorPassword = validarNuevaPassword(password, passwordConfirmacion);
+      if (errorPassword) {
+        setError(errorPassword);
         return;
       }
     }
@@ -90,10 +91,10 @@ export function Login() {
   }
 
   return (
-    <main className="grid min-h-screen bg-background lg:grid-cols-[1fr_480px]">
-      <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex">
+    <main className="login-page grid min-h-screen bg-background lg:grid-cols-[1fr_480px]">
+      <section className="login-intro hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex">
         <div>
-          <div className="mb-16 inline-flex items-center rounded-md border border-white/20 px-3 py-2 text-sm font-semibold">
+          <div className="login-brand mb-16 inline-flex items-center rounded-md border border-white/20 px-3 py-2 text-sm font-semibold">
             Gestor Mesas
           </div>
           <h1 className="max-w-xl text-5xl font-bold leading-tight">
@@ -103,7 +104,7 @@ export function Login() {
             Acceso con usuarios, roles y locales para separar la operacion diaria.
           </p>
         </div>
-        <div className="grid max-w-2xl grid-cols-3 gap-3 text-sm">
+        <div className="login-features grid max-w-2xl grid-cols-3 gap-3 text-sm">
           <div className="rounded-md border border-white/15 bg-white/10 p-4">
             <p className="font-semibold">Ventas</p>
             <p className="mt-1 text-primary-foreground/70">Historial y cobros separados.</p>
@@ -119,15 +120,15 @@ export function Login() {
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
+      <section className="login-form-area flex items-center justify-center p-4 sm:p-8">
+        <div className="login-form-card w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold uppercase text-muted-foreground">Acceso</p>
               <h2 className="text-2xl font-bold">{title}</h2>
             </div>
             {mode !== "login" && (
-              <Button size="icon" type="button" variant="ghost" onClick={() => cambiarModo("login")}>
+              <Button size="icon" type="button" variant="ghost" aria-label="Volver al inicio de sesión" onClick={() => cambiarModo("login")}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
@@ -141,6 +142,7 @@ export function Login() {
                 Nombre del negocio
                 <Input
                   className="mt-1"
+                  maxLength={100}
                   placeholder="Ej: Estacion de cafe"
                   type="text"
                   value={nombreLocal}
@@ -173,16 +175,22 @@ export function Login() {
                     placeholder="********"
                     type={showPassword ? "text" : "password"}
                     value={password}
+                    minLength={mode === "register" ? 6 : undefined}
+                    autoComplete={mode === "register" ? "new-password" : "current-password"}
+                    aria-describedby={mode === "register" ? "registro-password-ayuda" : undefined}
                     onChange={(event) => setPassword(event.target.value)}
                   />
                   <button
                     className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     type="button"
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-pressed={showPassword}
                     onClick={() => setShowPassword((prev) => !prev)}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {mode === "register" && <PasswordRequisitos password={password} id="registro-password-ayuda" />}
               </label>
             )}
 
@@ -200,13 +208,13 @@ export function Login() {
             )}
 
             {error && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
 
             {mensaje && (
-              <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+              <div role="status" className={`rounded-md border px-3 py-2 text-sm ${mode === "recover" ? "login-recovery-success" : "border-primary/30 bg-primary/10 text-primary"}`}>
                 {mensaje}
               </div>
             )}

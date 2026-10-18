@@ -10,6 +10,9 @@ import { Ventas } from './pages/Ventas'
 import { Gastos } from './pages/Gastos'
 import { Login } from './pages/Login'
 import { useAuth } from './context/AuthContext';
+import { useLocal } from './context/LocalContext';
+import { RestablecerPassword } from './pages/RestablecerPassword';
+import { RUTA_RECUPERACION, enlaceRecuperacionConError } from './lib/recuperacionPassword';
 
 function PantallaCarga() {
   return (
@@ -38,18 +41,40 @@ function RutaPrivada({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const [modoEdicion, setModoEdicion] = useState(false);
   const location = useLocation();
-  const { cargandoAuth, user } = useAuth();
-  const ocultarNavbar = location.pathname === "/login";
+  const { cargandoAuth, user, recuperandoPassword, cerrarSesion } = useAuth();
+  const { localId, cargandoLocal, errorLocal } = useLocal();
+  const ocultarNavbar = location.pathname === "/login" || location.pathname === RUTA_RECUPERACION;
 
   if (cargandoAuth) {
     return <PantallaCarga />;
+  }
+
+  if ((recuperandoPassword || enlaceRecuperacionConError(location.search, location.hash)) && location.pathname !== RUTA_RECUPERACION) {
+    return <Navigate to={`${RUTA_RECUPERACION}${location.search}${location.hash}`} replace />;
+  }
+
+  if (user && !ocultarNavbar) {
+    if (cargandoLocal) return <PantallaCarga />;
+    if (!localId || errorLocal) {
+      return (
+        <main className="grid min-h-screen place-items-center bg-background p-6">
+          <section className="max-w-md space-y-4 rounded-lg border bg-card p-6 shadow-sm">
+            <h1 className="text-xl font-semibold">No se pudo acceder a tu cafetería</h1>
+            <p className="text-sm text-muted-foreground" role="alert">{errorLocal ?? "Tu cuenta no tiene una cafetería activa asociada. Contactá al administrador."}</p>
+            <button type="button" className="rounded-md border px-4 py-2 text-sm" onClick={() => window.location.reload()}>Reintentar</button>
+            <button type="button" className="ml-3 rounded-md border px-4 py-2 text-sm" onClick={() => { cerrarSesion().catch(() => window.alert("No se pudo cerrar la sesión. Intentá nuevamente.")); }}>Cerrar sesión</button>
+          </section>
+        </main>
+      );
+    }
   }
 
   return (
     <>
       {!ocultarNavbar && user && <Navbar modoEdicion={modoEdicion} setModoEdicion={setModoEdicion} />}
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/login" element={user && !location.search.includes("recuperar=1") ? <Navigate to="/" replace /> : <Login />} />
+        <Route path={RUTA_RECUPERACION} element={<RestablecerPassword />} />
         <Route path="/" element={<RutaPrivada><MesaManager modoEdicion={modoEdicion} /></RutaPrivada>} />
         <Route path="/mostrador" element={<RutaPrivada><Mostrador /></RutaPrivada>} />
         <Route path="/productos" element={<RutaPrivada><Productos /></RutaPrivada>} />

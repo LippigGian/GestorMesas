@@ -145,6 +145,8 @@ export function Configuracion() {
 
   useEffect(() => {
     if (seccionActivaId !== "proveedores") return;
+    if (cargandoLocal || !localId) return;
+    const localIdActual = localId;
 
     let mounted = true;
 
@@ -152,7 +154,7 @@ export function Configuracion() {
       try {
         setCargandoProveedores(true);
         setErrorProveedores(null);
-        const data = await obtenerTodosProveedores();
+        const data = await obtenerTodosProveedores(localIdActual);
 
         if (mounted) {
           setProveedores(data);
@@ -175,7 +177,7 @@ export function Configuracion() {
     return () => {
       mounted = false;
     };
-  }, [seccionActivaId]);
+  }, [cargandoLocal, localId, seccionActivaId]);
 
   const agregarMedioPago = async () => {
     if (!localId) {
@@ -253,6 +255,10 @@ export function Configuracion() {
   };
 
   const agregarProveedor = async () => {
+    if (!localId) {
+      setErrorProveedores("No hay un local activo configurado.");
+      return;
+    }
     let nombreValidado = "";
 
     try {
@@ -275,7 +281,7 @@ export function Configuracion() {
     try {
       setGuardandoProveedores(true);
       setErrorProveedores(null);
-      const creado = await crearProveedor(nombreValidado);
+      const creado = await crearProveedor(nombreValidado, localId);
       setProveedores((prev) =>
         [...prev, creado].sort((a, b) => a.nombre.localeCompare(b.nombre))
       );
