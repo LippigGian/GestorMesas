@@ -6,7 +6,7 @@ import { IndicadorEstadoCaja } from "@/components/ventas/IndicadorEstadoCaja";
 import { RectificacionArqueo } from "@/components/ventas/RectificacionArqueo";
 import type { EstadoRectificacion } from "@/lib/rectificacionesArqueo";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Filter, Plus, ReceiptText, X } from "lucide-react";
+import { ArrowLeft, Filter, Plus, ReceiptText, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocal } from "@/context/LocalContext";
@@ -836,231 +836,41 @@ function ArqueosCajaView({
 }: ArqueosCajaViewProps) {
   const [filtroRectificaciones,setFiltroRectificaciones]=useState<FiltroRectificaciones>("todos");
   const arqueosFiltrados=filtrarPorRectificacion(arqueos,filtroRectificaciones);
+  const arqueoAbierto = arqueos.find((arqueo) => arqueo.estado === "abierto") ?? null;
+  const cajaActual = cajasActivas.find((caja) => caja.id === arqueoAbierto?.cajaId);
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_420px]">
-      <section className="border-r p-4">
-        <div className="mb-4 flex items-center justify-between bg-primary/80 px-4 py-3 text-primary-foreground">
-          <h1 className="text-xl font-bold">Arqueos de Caja</h1>
-          <Button disabled={guardando || cajasActivas.length === 0} type="button" variant="secondary" onClick={onAbrirArqueo}>
-            <Plus className="h-4 w-4" />
-            Nuevo arqueo de caja
-          </Button>
-        </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6 pt-4 md:pt-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary"><Wallet className="h-6 w-6" aria-hidden="true" /></span><div><h1 className="text-2xl font-bold">Arqueos de caja</h1><p className="mt-1 text-sm text-muted-foreground">Administrá la apertura, el cierre y el historial de tus cajas.</p></div></div>
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${arqueoAbierto ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{arqueoAbierto ? "Caja abierta" : "Caja cerrada"}</span>
+      </header>
 
-        {error && (
-          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+      {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
 
-        <div className="mb-4 grid gap-3 rounded-md border bg-muted p-3 md:grid-cols-[1fr_1fr_1fr]">
-          <select
-            className="h-10 rounded-md border bg-background px-3"
-            value={cajaId}
-            onChange={(event) => setCajaId(event.target.value)}
-          >
-            {cajasActivas.length === 0 && <option value="">Sin cajas activas</option>}
-            {cajasActivas.map((caja) => (
-              <option key={caja.id} value={caja.id}>
-                {caja.nombre}
-              </option>
-            ))}
-          </select>
-          <Input
-            type="datetime-local"
-            value={fechaHoraApertura}
-            onChange={(event) => setFechaHoraApertura(event.target.value)}
-          />
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
-              $
-            </span>
-            <Input
-              className="pl-7"
-              min={0}
-              step={0.01}
-              placeholder="Monto inicial"
-              inputMode="decimal"
-              type="text"
-              value={montoInicial}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (esMontoPositivoInput(value)) {
-                  setMontoInicial(value);
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        <section className="mb-6 grid gap-4 rounded-md border bg-card p-4 md:grid-cols-5">
-          <ResumenDato label="Arqueo de Caja" value={`${arqueos.length} caja`} />
-          <ResumenDato label="Saldo actual" value={formatearMoneda(saldoActual)} />
-          <ResumenDato label="Total de ventas" value={formatearMoneda(totalVentas)} />
-          <ResumenDato label="Ingresos" value="$0" />
-          <ResumenDato label="Egresos" value="$0" />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <section className="self-start overflow-hidden rounded-2xl border bg-card">
+          <div className="border-b bg-secondary/40 p-5 sm:p-6"><h2 className="text-sm font-semibold">Estado actual</h2><p className="mt-5 text-xl font-bold">{arqueoAbierto ? cajaActual?.nombre ?? "Caja abierta" : "No hay una caja abierta"}</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{arqueoAbierto ? `Abierta desde ${formatearFecha(arqueoAbierto.openedAt)}.` : "Abrí una caja para empezar a registrar cobros."}</p></div>
+          <div className="grid grid-cols-2 gap-4 p-5 text-sm sm:p-6"><ResumenDato label="Arqueos" value={`${arqueos.length}`} /><ResumenDato label="Saldo actual" value={formatearMoneda(saldoActual)} /><ResumenDato label="Ventas" value={formatearMoneda(totalVentas)} /><ResumenDato label="Estado" value={arqueoAbierto ? "Abierto" : "Cerrado"} /></div>
         </section>
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <SelectorRectificaciones valor={filtroRectificaciones} onChange={setFiltroRectificaciones} disponible={arqueos.every(a=>a.cantidadRectificaciones !== undefined)} />
-          <span className="text-xs text-muted-foreground">{arqueosFiltrados.length} de {arqueos.length} arqueos</span>
-        </div>
-        <section className="overflow-hidden rounded-md border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary text-secondary-foreground">
-              <tr>
-                <th className="p-3 text-left">Apertura / Cierre</th>
-                <th className="p-3 text-right">$ Sistema</th>
-                <th className="p-3 text-right">$ Usuario</th>
-                <th className="p-3 text-right">Diferencia</th>
-                <th className="p-3 text-left">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cargando ? (
-                <tr>
-                  <td className="p-6 text-center text-muted-foreground" colSpan={5}>
-                    Cargando arqueos...
-                  </td>
-                </tr>
-              ) : arqueosFiltrados.length > 0 ? (
-                arqueosFiltrados.map((arqueo) => (
-                  <tr
-                    key={arqueo.id}
-                    className={`cursor-pointer border-b transition hover:bg-muted/50 ${
-                      arqueoSeleccionado?.id === arqueo.id ? "bg-accent/20" : ""
-                    }`}
-                    onClick={() => onSelectArqueo(arqueo)}
-                  >
-                    <td className="p-3">
-                      <div className="font-semibold">{formatearFecha(arqueo.openedAt)}</div>
-                      <div className="text-muted-foreground">{formatearFecha(arqueo.closedAt)}</div>
-                    </td>
-                    <td className="p-3 text-right">{formatearMoneda(arqueo.totalVentas)}</td>
-                    <td className="p-3 text-right">
-                      {arqueo.montoFinalDeclarado === undefined
-                        ? "-"
-                        : formatearMoneda(arqueo.montoFinalDeclarado)}
-                    </td>
-                    <td className={`p-3 text-right ${claseDiferencia(arqueo.diferencia)}`}>
-                      {arqueo.diferencia === undefined ? "-" : formatearMoneda(arqueo.diferencia)}
-                    </td>
-                    <td className="p-3"><div className="flex flex-wrap items-center gap-2"><span>{arqueo.estado}</span><DistintivoRectificacion cantidad={arqueo.cantidadRectificaciones}/></div></td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="p-6 text-center text-muted-foreground" colSpan={5}>
-                    {filtroRectificaciones === "todos" ? "No hay arqueos cargados." : "No hay arqueos que coincidan con este filtro."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      </section>
-
-      {arqueoSeleccionado ? (
-        <aside className="p-6">
-          <div className="mb-4 flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">Detalle de arqueo</h2><DistintivoRectificacion cantidad={arqueoSeleccionado.cantidadRectificaciones}/></div>
-          <div className="space-y-3 rounded-md border bg-card p-4 text-sm shadow-sm">
-            <DetalleDato label="Caja" value={arqueoSeleccionado.cajaNombre ?? "-"} />
-            <DetalleDato label="Estado" value={arqueoSeleccionado.estado} />
-            <DetalleDato label="Apertura" value={formatearFecha(arqueoSeleccionado.openedAt)} />
-            <DetalleDato label="Cierre" value={formatearFecha(arqueoSeleccionado.closedAt)} />
-            <DetalleDato label="Monto inicial" value={formatearMoneda(arqueoSeleccionado.montoInicial)} />
-            <DetalleDato label="Total ventas" value={formatearMoneda(arqueoSeleccionado.totalVentas)} />
-            {arqueoSeleccionado.estado === "cerrado" && <>
-              <DetalleDato label="Total declarado" value={arqueoSeleccionado.montoFinalDeclarado === undefined ? "—" : formatearMoneda(arqueoSeleccionado.montoFinalDeclarado)} />
-              <DetalleDato label="Diferencia" value={arqueoSeleccionado.diferencia === undefined ? "—" : formatearMoneda(arqueoSeleccionado.diferencia)} valueClassName={claseDiferencia(arqueoSeleccionado.diferencia)} />
+        <form className="overflow-hidden rounded-2xl border bg-card" onSubmit={(event) => { event.preventDefault(); if (arqueoAbierto) onCerrarArqueo(); else onAbrirArqueo(); }}>
+          <div className="border-b p-5 sm:p-6"><h2 className="text-lg font-bold">{arqueoAbierto ? "Cerrar caja" : "Abrir caja"}</h2><p className="mt-1 text-sm text-muted-foreground">{arqueoAbierto ? "Ingresá los importes contados por cada medio de pago." : "Indicá la caja, el momento de apertura y el fondo inicial."}</p></div>
+          <div className="space-y-5 p-5 sm:p-6">
+            {arqueoAbierto ? <div className="grid gap-4 sm:grid-cols-2">{mediosPago.map((medio) => <div key={medio.id} className="space-y-2"><label htmlFor={`cierre-${medio.id}`} className="block text-sm font-medium">{medio.nombre}</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id={`cierre-${medio.id}`} className="min-h-11 pl-8 tabular-nums" required disabled={guardando} inputMode="decimal" placeholder="0,00" value={declaracionesCierre[medio.id] ?? ""} onChange={(event) => { const value = event.target.value; if (esMontoPositivoInput(value)) setDeclaracionCierre(medio.id, value); }} /></div></div>)}</div> : <>
+              <div className="space-y-2"><label htmlFor="arqueo-caja" className="block text-sm font-medium">Caja</label><select id="arqueo-caja" required disabled={guardando} className="min-h-11 w-full rounded-md border bg-background px-3 text-base" value={cajaId} onChange={(event) => setCajaId(event.target.value)}>{cajasActivas.length === 0 && <option value="">Sin cajas activas</option>}{cajasActivas.map((caja) => <option key={caja.id} value={caja.id}>{caja.nombre}</option>)}</select></div>
+              <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor="arqueo-fecha" className="block text-sm font-medium">Fecha y hora de apertura</label><Input id="arqueo-fecha" required disabled={guardando} type="datetime-local" value={fechaHoraApertura} onChange={(event) => setFechaHoraApertura(event.target.value)} /></div><div className="space-y-2"><label htmlFor="arqueo-inicial" className="block text-sm font-medium">Monto inicial</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id="arqueo-inicial" required disabled={guardando} className="min-h-11 pl-8 tabular-nums" inputMode="decimal" placeholder="0,00" value={montoInicial} onChange={(event) => { const value = event.target.value; if (esMontoPositivoInput(value)) setMontoInicial(value); }} /></div></div></div>
             </>}
           </div>
-          {arqueoSeleccionado.estado === "cerrado" && <RectificacionArqueo key={arqueoSeleccionado.id} arqueoId={arqueoSeleccionado.id} onRectificado={onRectificado} />}
-          <div className="mt-4 rounded-md border bg-card p-4 text-sm shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="font-semibold">Medios de pago</h3>
-              {arqueoSeleccionado.estado === "abierto" && (
-                <Button
-                  disabled={guardando || mediosPago.length === 0}
-                  type="button"
-                  onClick={onCerrarArqueo}
-                >
-                  Cerrar caja
-                </Button>
-              )}
-            </div>
-            {arqueoSeleccionado.estado === "abierto" ? (
-              <div className="space-y-2">
-                {mediosPago.map((medio) => {
-                  const detalle = detalleMediosSeleccionado.find(
-                    (item) => item.medioPagoId === medio.id
-                  );
-                  const montoSistema = detalle?.montoSistema ?? 0;
-                  const montoUsuario = Number(
-                    (declaracionesCierre[medio.id] ?? "0").replace(",", ".")
-                  );
-                  const diferencia =
-                    (Number.isFinite(montoUsuario) ? montoUsuario : 0) - montoSistema;
+          <div className="flex justify-end border-t bg-secondary/20 p-5 sm:px-6"><Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={guardando || (!arqueoAbierto && (!cajaId || cajasActivas.length === 0))}>{guardando ? "Guardando…" : arqueoAbierto ? "Confirmar cierre" : "Abrir caja"}</Button></div>
+        </form>
+      </div>
 
-                  return (
-                    <div key={medio.id} className="rounded-md border p-3">
-                      <div className="mb-2 font-medium">{medio.nombre}</div>
-                      <DetalleDato label="Sistema" value={formatearMoneda(montoSistema)} />
-                      <label className="mt-2 block text-xs font-medium text-muted-foreground">
-                        Usuario
-                        <div className="relative mt-1">
-                          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
-                            $
-                          </span>
-                          <Input
-                            className="pl-7"
-                            inputMode="decimal"
-                            placeholder="0"
-                            type="text"
-                            value={declaracionesCierre[medio.id] ?? ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (esMontoPositivoInput(value)) {
-                                setDeclaracionCierre(medio.id, value);
-                              }
-                            }}
-                          />
-                        </div>
-                      </label>
-                      <DetalleDato
-                        label="Diferencia"
-                        value={formatearMoneda(diferencia)}
-                        valueClassName={claseDiferencia(diferencia)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            ) : detalleMediosSeleccionado.length > 0 ? (
-              <div className="space-y-2">
-                {detalleMediosSeleccionado.map((detalle) => (
-                  <div key={detalle.medioPagoId} className="rounded-md border p-3">
-                    <div className="mb-2 font-medium">{detalle.medioPagoNombre ?? "Medio de pago"}</div>
-                    <DetalleDato label="Sistema" value={formatearMoneda(detalle.montoSistema)} />
-                    <DetalleDato label="Usuario" value={formatearMoneda(detalle.montoDeclarado)} />
-                    <DetalleDato
-                      label="Diferencia"
-                      value={formatearMoneda(detalle.diferencia)}
-                      valueClassName={claseDiferencia(detalle.diferencia)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                El detalle por medio de pago aparece cuando se cierra el arqueo.
-              </p>
-            )}
-          </div>
-        </aside>
-      ) : (
-        <DetalleVacio />
-      )}
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <header className="flex flex-wrap items-center gap-3 border-b p-5 sm:p-6"><div className="min-w-0 flex-1"><h2 className="font-bold">Historial de arqueos</h2><p className="mt-1 text-sm text-muted-foreground">Seleccioná un arqueo para consultar el detalle o rectificar un cierre.</p></div><SelectorRectificaciones valor={filtroRectificaciones} onChange={setFiltroRectificaciones} disponible={arqueos.every((arqueo) => arqueo.cantidadRectificaciones !== undefined)} /></header>
+        <div className="overflow-x-auto"><table className="w-full whitespace-nowrap text-sm"><thead><tr><th className="px-5 py-4 text-left">Apertura / cierre</th><th className="px-5 py-4 text-right">Ventas</th><th className="px-5 py-4 text-right">Declarado</th><th className="px-5 py-4 text-right">Diferencia</th><th className="px-5 py-4 text-left">Estado</th></tr></thead><tbody>{cargando ? <tr><td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">Cargando arqueos…</td></tr> : arqueosFiltrados.length > 0 ? arqueosFiltrados.map((arqueo) => <tr key={arqueo.id} className={`cursor-pointer border-t transition hover:bg-muted/50 ${arqueoSeleccionado?.id === arqueo.id ? "bg-accent/20" : ""}`} onClick={() => onSelectArqueo(arqueo)}><td className="px-5 py-4"><div className="font-medium">{formatearFecha(arqueo.openedAt)}</div><div className="text-muted-foreground">{formatearFecha(arqueo.closedAt)}</div></td><td className="px-5 py-4 text-right tabular-nums">{formatearMoneda(arqueo.totalVentas)}</td><td className="px-5 py-4 text-right tabular-nums">{arqueo.montoFinalDeclarado === undefined ? "—" : formatearMoneda(arqueo.montoFinalDeclarado)}</td><td className={`px-5 py-4 text-right tabular-nums ${claseDiferencia(arqueo.diferencia)}`}>{arqueo.diferencia === undefined ? "—" : formatearMoneda(arqueo.diferencia)}</td><td className="px-5 py-4"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${arqueo.estado === "abierto" ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{arqueo.estado}</span><DistintivoRectificacion cantidad={arqueo.cantidadRectificaciones} /></div></td></tr>) : <tr><td colSpan={5} className="px-5 py-10 text-center text-muted-foreground">{filtroRectificaciones === "todos" ? "Todavía no hay arqueos registrados." : "No hay arqueos que coincidan con este filtro."}</td></tr>}</tbody></table></div>
+      </section>
+
+      {arqueoSeleccionado && <section className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"><div className="rounded-2xl border bg-card p-5 sm:p-6"><div className="mb-4 flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">Detalle de arqueo</h2><DistintivoRectificacion cantidad={arqueoSeleccionado.cantidadRectificaciones} /></div><div className="space-y-3 text-sm"><DetalleDato label="Caja" value={arqueoSeleccionado.cajaNombre ?? "—"} /><DetalleDato label="Estado" value={arqueoSeleccionado.estado} /><DetalleDato label="Apertura" value={formatearFecha(arqueoSeleccionado.openedAt)} /><DetalleDato label="Cierre" value={formatearFecha(arqueoSeleccionado.closedAt)} /><DetalleDato label="Monto inicial" value={formatearMoneda(arqueoSeleccionado.montoInicial)} /><DetalleDato label="Total ventas" value={formatearMoneda(arqueoSeleccionado.totalVentas)} />{arqueoSeleccionado.estado === "cerrado" && <><DetalleDato label="Total declarado" value={arqueoSeleccionado.montoFinalDeclarado === undefined ? "—" : formatearMoneda(arqueoSeleccionado.montoFinalDeclarado)} /><DetalleDato label="Diferencia" value={arqueoSeleccionado.diferencia === undefined ? "—" : formatearMoneda(arqueoSeleccionado.diferencia)} valueClassName={claseDiferencia(arqueoSeleccionado.diferencia)} /></>}</div>{arqueoSeleccionado.estado === "cerrado" && <RectificacionArqueo key={arqueoSeleccionado.id} arqueoId={arqueoSeleccionado.id} onRectificado={onRectificado} />}</div><div className="rounded-2xl border bg-card p-5 sm:p-6"><h3 className="mb-4 font-bold">Medios de pago</h3>{detalleMediosSeleccionado.length > 0 ? <div className="space-y-3">{detalleMediosSeleccionado.map((detalle) => <div key={detalle.medioPagoId} className="rounded-xl border p-4 text-sm"><p className="mb-3 font-medium">{detalle.medioPagoNombre ?? "Medio de pago"}</p><DetalleDato label="Sistema" value={formatearMoneda(detalle.montoSistema)} /><DetalleDato label="Usuario" value={formatearMoneda(detalle.montoDeclarado)} /><DetalleDato label="Diferencia" value={formatearMoneda(detalle.diferencia)} valueClassName={claseDiferencia(detalle.diferencia)} /></div>)}</div> : <p className="text-sm text-muted-foreground">Seleccioná un arqueo cerrado para ver el detalle de sus medios de pago.</p>}</div></section>}
     </div>
   );
 }
