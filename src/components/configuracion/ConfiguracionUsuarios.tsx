@@ -1,308 +1,82 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pencil } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MailPlus, Pencil, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RolUsuario, UsuarioSistema } from "@/lib/types";
+import { usePermisos } from "@/context/PermisosContext";
+import type { RolUsuario } from "@/lib/types";
 import { obtenerRolesUsuarios } from "@/services/rolesUsuariosService";
-import {
-  activarUsuarioSistema,
-  actualizarUsuarioSistema,
-  crearUsuarioSistema,
-  desactivarUsuarioSistema,
-  normalizarEmailUsuario,
-  obtenerUsuariosSistema,
-  validarEmailUsuario,
-  validarNombreUsuario,
-} from "@/services/usuariosService";
+import { actualizarEmpleado, invitarEmpleado, obtenerEmpleados, type Empleado } from "@/services/empleadosService";
 
-export function ConfiguracionUsuarios() {
-  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([]);
+export function ConfiguracionUsuarios({ onCrearRol }: { onCrearRol?: () => void }) {
+  const { administrador, tiene } = usePermisos();
+  const [usuarios, setUsuarios] = useState<Empleado[]>([]);
   const [roles, setRoles] = useState<RolUsuario[]>([]);
-  const [usuarioEditando, setUsuarioEditando] = useState<UsuarioSistema | null>(null);
+  const [editando, setEditando] = useState<Empleado | null>(null);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [rolId, setRolId] = useState("");
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const rolesActivos = useMemo(() => roles.filter((rol) => rol.activo), [roles]);
-
+  const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [recarga, setRecarga] = useState(0);
+  const solicitud = useRef(crypto.randomUUID());
+  const rolesAsignables = useMemo(() => roles.filter(rol => rol.activo && (administrador || rol.permisos.every(p => tiene(p as Parameters<typeof tiene>[0])))), [roles, administrador, tiene]);
   useEffect(() => {
-    let mounted = true;
-
-    async function cargarDatos() {
-      try {
-        setCargando(true);
-        setError(null);
-        const [usuariosDb, rolesDb] = await Promise.all([
-          obtenerUsuariosSistema(),
-          obtenerRolesUsuarios(),
-        ]);
-
-        if (mounted) {
-          setUsuarios(usuariosDb);
-          setRoles(rolesDb);
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "No se pudieron cargar los usuarios");
-        }
-      } finally {
-        if (mounted) {
-          setCargando(false);
-        }
-      }
-    }
-
-    cargarDatos();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const limpiarFormulario = () => {
-    setUsuarioEditando(null);
-    setNombre("");
-    setEmail("");
-    setRolId("");
-    setError(null);
-  };
-
-  const validarFormulario = () => {
-    let nombreValidado = "";
-    let emailValidado = "";
-
+    let vigente = true;
+    setCargando(true);
+    Promise.all([obtenerEmpleados(), obtenerRolesUsuarios()]).then(([usuarios, roles]) => {
+      if (vigente) { setUsuarios(usuarios); setRoles(roles); setError(""); }
+    }).catch(err => { if (vigente) setError(err instanceof Error ? err.message : "No se pudo cargar el equipo."); })
+      .finally(() => { if (vigente) setCargando(false); });
+    return () => { vigente = false; };
+  }, [recarga]);
+  const nuevoIntento = () => { solicitud.current = crypto.randomUUID(); setMensaje(""); };
+  const limpiar = () => { setEditando(null); setNombre(""); setEmail(""); setRolId(""); solicitud.current = crypto.randomUUID(); };
+  const cambiarEstado = async (empleado: Empleado) => {
+    if (!empleado.editable || !empleado.rol_id || guardando) return;
+    if (empleado.activo && !window.confirm(`¿Desactivar el acceso de ${empleado.nombre}? Sus pedidos e historial se conservarán.`)) return;
+    setGuardando(true); setError(""); setMensaje("");
     try {
-      nombreValidado = validarNombreUsuario(nombre);
-      emailValidado = validarEmailUsuario(email);
-    } catch (err) {
-      return {
-        error: err instanceof Error ? err.message : "Revisa los datos del usuario.",
-        nombreValidado,
-        emailValidado,
-      };
-    }
-
-    const yaExiste = usuarios.some(
-      (usuario) =>
-        usuario.id !== usuarioEditando?.id &&
-        normalizarEmailUsuario(usuario.email) === emailValidado
-    );
-
-    if (yaExiste) {
-      return {
-        error: "Ya existe un usuario con ese email.",
-        nombreValidado,
-        emailValidado,
-      };
-    }
-
-    return {
-      error: null,
-      nombreValidado,
-      emailValidado,
-    };
+      await actualizarEmpleado(empleado, empleado.nombre, empleado.rol_id, !empleado.activo);
+      setRecarga(n => n + 1); setMensaje(empleado.activo ? "Acceso desactivado." : "Acceso activado.");
+      if (editando?.id === empleado.id) limpiar();
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo cambiar el acceso."); }
+    finally { setGuardando(false); }
   };
-
-  const guardarUsuario = async () => {
-    const validacion = validarFormulario();
-
-    if (validacion.error) {
-      setError(validacion.error);
-      return;
-    }
-
-    try {
-      setGuardando(true);
-      setError(null);
-      const usuarioGuardado = usuarioEditando
-        ? await actualizarUsuarioSistema({
-            usuarioId: usuarioEditando.id,
-            nombre: validacion.nombreValidado,
-            email: validacion.emailValidado,
-            rolId,
-          })
-        : await crearUsuarioSistema({
-            nombre: validacion.nombreValidado,
-            email: validacion.emailValidado,
-            rolId,
-          });
-
-      setUsuarios((prev) => {
-        const existe = prev.some((usuario) => usuario.id === usuarioGuardado.id);
-        const nuevos = existe
-          ? prev.map((usuario) =>
-              usuario.id === usuarioGuardado.id ? usuarioGuardado : usuario
-            )
-          : [...prev, usuarioGuardado];
-
-        return nuevos.sort((a, b) => a.nombre.localeCompare(b.nombre));
-      });
-      limpiarFormulario();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar el usuario");
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const cambiarEstadoUsuario = async (usuario: UsuarioSistema, activo: boolean) => {
-    if (!activo && !window.confirm(`Eliminar el usuario "${usuario.nombre}"?`)) {
-      return;
-    }
-
-    try {
-      setGuardando(true);
-      setError(null);
-
-      if (activo) {
-        await activarUsuarioSistema(usuario.id);
-      } else {
-        await desactivarUsuarioSistema(usuario.id);
-      }
-
-      setUsuarios((prev) =>
-        prev.map((item) => (item.id === usuario.id ? { ...item, activo } : item))
-      );
-      if (usuarioEditando?.id === usuario.id && !activo) {
-        limpiarFormulario();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el usuario");
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      <div className="grid gap-2 rounded-md border bg-muted/40 p-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto_auto]">
-        <Input
-          placeholder="Nombre del usuario"
-          value={nombre}
-          onChange={(event) => setNombre(event.target.value)}
-        />
-        <Input
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-        <select
-          className="h-10 rounded-md border bg-background px-3"
-          value={rolId}
-          onChange={(event) => setRolId(event.target.value)}
-        >
-          <option value="">Sin rol</option>
-          {rolesActivos.map((rol) => (
-            <option key={rol.id} value={rol.id}>
-              {rol.nombre}
-            </option>
-          ))}
-        </select>
-        <Button disabled={guardando} type="button" onClick={guardarUsuario}>
-          {usuarioEditando ? "Guardar" : "Crear"}
-        </Button>
-        {usuarioEditando && (
-          <Button disabled={guardando} type="button" variant="outline" onClick={limpiarFormulario}>
-            Cancelar
-          </Button>
-        )}
-      </div>
-
-      <div className="overflow-hidden rounded-md border">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary text-secondary-foreground">
-            <tr>
-              <th className="p-3 text-left">Nombre</th>
-              <th className="p-3 text-left">Email</th>
-              <th className="p-3 text-left">Rol</th>
-              <th className="p-3 text-left">Estado</th>
-              <th className="p-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cargando ? (
-              <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={5}>
-                  Cargando usuarios...
-                </td>
-              </tr>
-            ) : usuarios.length > 0 ? (
-              usuarios.map((usuario) => (
-                <tr key={usuario.id} className="border-b">
-                  <td className="p-3 font-medium">{usuario.nombre}</td>
-                  <td className="p-3 text-muted-foreground">{usuario.email}</td>
-                  <td className="p-3">
-                    <span className="rounded bg-muted px-2 py-1 text-xs">
-                      {usuario.rolNombre ?? "Sin rol"}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className="rounded bg-muted px-2 py-1 text-xs">
-                      {usuario.activo ? "Activo" : "Inactivo"}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        disabled={guardando}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setUsuarioEditando(usuario);
-                          setNombre(usuario.nombre);
-                          setEmail(usuario.email);
-                          setRolId(usuario.rolId ?? "");
-                          setError(null);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                      {usuario.activo ? (
-                        <Button
-                          disabled={guardando}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                          onClick={() => cambiarEstadoUsuario(usuario, false)}
-                        >
-                          Eliminar
-                        </Button>
-                      ) : (
-                        <Button
-                          disabled={guardando}
-                          size="sm"
-                          type="button"
-                          variant="secondary"
-                          onClick={() => cambiarEstadoUsuario(usuario, true)}
-                        >
-                          Activar
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="p-4 text-center text-muted-foreground" colSpan={5}>
-                  No hay usuarios cargados.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="max-w-xl text-sm text-muted-foreground">Invitá a tu equipo por correo y asignale un rol de esta cafetería. Cada empleado establecerá su propia contraseña.</p>
+      <Button variant="outline" disabled={cargando || guardando} onClick={() => setRecarga(n => n + 1)}><RefreshCw aria-hidden="true" className="h-4 w-4" />Actualizar</Button>
     </div>
-  );
+    {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+    {mensaje && <p role="status" className="rounded-lg border border-green-700/30 bg-green-50 p-3 text-sm text-green-800">{mensaje}</p>}
+    {!cargando && rolesAsignables.length === 0 && <div className="rounded-lg border bg-muted/40 p-4 text-sm"><p>Primero creá un rol activo con los permisos que tendrá el empleado.</p>{onCrearRol && <Button variant="outline" className="mt-3" onClick={onCrearRol}>Crear un rol</Button>}</div>}
+    <form className="grid items-end gap-4 rounded-xl border bg-muted/30 p-4 lg:grid-cols-[1fr_1.2fr_1fr_auto]" aria-label={editando ? "Editar empleado" : "Invitar empleado"} onSubmit={async event => {
+      event.preventDefault(); if (guardando) return;
+      setError(""); setMensaje("");
+      if (!nombre.trim() || !email.trim() || !rolesAsignables.some(rol => rol.id === rolId)) { setError("Completá nombre, correo y un rol activo que puedas asignar."); return; }
+      setGuardando(true);
+      try {
+        if (editando) {
+          await actualizarEmpleado(editando, nombre.trim(), rolId, editando.activo);
+          setMensaje("Empleado actualizado.");
+        } else setMensaje(await invitarEmpleado({ nombre: nombre.trim(), email: email.trim().toLowerCase(), rolId, solicitudId: solicitud.current }));
+        limpiar(); setRecarga(n => n + 1);
+      } catch (err) { setError(err instanceof Error ? err.message : "No se pudo completar la operación."); }
+      finally { setGuardando(false); }
+    }}>
+      <label className="space-y-2 text-sm font-medium" htmlFor="empleado-nombre"><span>Nombre</span><Input id="empleado-nombre" className="min-h-11" autoComplete="name" required maxLength={100} value={nombre} disabled={guardando} onChange={e => { setNombre(e.target.value); nuevoIntento(); }} /></label>
+      <label className="space-y-2 text-sm font-medium" htmlFor="empleado-email"><span>Correo electrónico</span><Input id="empleado-email" className="min-h-11" type="email" autoComplete="email" required maxLength={254} readOnly={Boolean(editando)} value={email} disabled={guardando} onChange={e => { setEmail(e.target.value); nuevoIntento(); }} />{editando && <span className="block text-xs font-normal text-muted-foreground">El correo de acceso se conserva.</span>}</label>
+      <label className="space-y-2 text-sm font-medium" htmlFor="empleado-rol"><span>Rol</span><select aria-label="Rol" id="empleado-rol" className="min-h-11 w-full rounded-md border bg-background px-3" required value={rolId} disabled={guardando || !rolesAsignables.length} onChange={e => { setRolId(e.target.value); nuevoIntento(); }}><option value="">Seleccionar rol</option>{rolesAsignables.map(rol => <option key={rol.id} value={rol.id}>{rol.nombre}</option>)}</select></label>
+      <div className="flex gap-2"><Button type="submit" className="min-h-11" disabled={guardando || cargando || !rolesAsignables.length}><MailPlus aria-hidden="true" className="h-4 w-4" />{guardando ? "Procesando…" : editando ? "Guardar cambios" : "Invitar empleado"}</Button>{editando && <Button className="min-h-11" type="button" variant="outline" disabled={guardando} onClick={limpiar}>Cancelar</Button>}</div>
+    </form>
+    <div className="overflow-x-auto rounded-xl border">
+      <table className="w-full text-sm"><caption className="sr-only">Equipo de esta cafetería</caption><thead className="bg-secondary text-secondary-foreground"><tr><th scope="col" className="p-3 text-left">Nombre</th><th scope="col" className="p-3 text-left">Correo</th><th scope="col" className="p-3 text-left">Rol</th><th scope="col" className="p-3 text-left">Acceso</th><th scope="col" className="p-3 text-right">Acciones</th></tr></thead>
+      <tbody>{cargando ? <tr><td colSpan={5} className="p-5 text-center" role="status">Cargando equipo…</td></tr> : usuarios.map(usuario => <tr className="border-t" key={usuario.id}>
+        <td className="p-3 font-medium">{usuario.nombre}</td><td className="p-3">{usuario.email}</td><td className="p-3">{usuario.rol_nombre ?? "Sin rol"}</td><td className="p-3"><span className="rounded-full bg-muted px-3 py-1 text-xs">{!usuario.activo ? "Inactivo" : usuario.pendiente ? "Invitación pendiente" : "Activo"}</span></td>
+        <td className="p-3"><div className="flex justify-end gap-2">{usuario.editable ? <><Button variant="outline" className="min-h-11" disabled={guardando} onClick={() => { setEditando(usuario); setNombre(usuario.nombre); setEmail(usuario.email); setRolId(usuario.rol_id ?? ""); setError(""); setMensaje(""); }}><Pencil aria-hidden="true" className="h-4 w-4" />Editar</Button><Button className="min-h-11" variant="outline" disabled={guardando} onClick={() => void cambiarEstado(usuario)}>{usuario.activo ? "Desactivar" : "Activar"}</Button></> : <span className="text-xs text-muted-foreground">{usuario.administrador ? "Cuenta administradora" : "Acceso protegido"}</span>}</div></td>
+      </tr>)}</tbody></table>
+    </div>
+  </div>;
 }

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarDays, CreditCard, Package, RefreshCw, ShoppingBag, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { desplazarFecha, fechaNegocio, resumirMetricas, validarRango, type DatosMetricas, type GrupoImporte, type RangoMetricas } from "@/lib/metricas";
+import { desplazarFecha, fechaNegocio, agruparMetricas, validarRango, type MetricasAgregadas, type GrupoImporte, type RangoMetricas } from "@/lib/metricas";
 import { useLocal } from "@/context/LocalContext";
-import { obtenerMetricas } from "@/services/metricasService";
+import { obtenerMetricasAgregadas } from "@/services/metricasService";
 import "./Metricas.css";
 
 const moneda = (valor: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(valor);
@@ -67,7 +67,7 @@ export function Metricas() {
   const [borrador, setBorrador] = useState(rango);
   const [agrupacion, setAgrupacion] = useState<"dia" | "mes">("dia");
   const [ordenProductos, setOrdenProductos] = useState<"cantidad" | "importe">("cantidad");
-  const [datos, setDatos] = useState<DatosMetricas | null>(null);
+  const [datos, setDatos] = useState<MetricasAgregadas | null>(null);
   const [error, setError] = useState("");
   const [errorFiltro, setErrorFiltro] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -78,14 +78,14 @@ export function Metricas() {
     setCargando(true);
     setDatos(null);
     setError("");
-    obtenerMetricas(rango, controller.signal, localId).then((resultado) => {
+    obtenerMetricasAgregadas(rango, controller.signal).then((resultado) => {
       if (!controller.signal.aborted) setDatos(resultado);
     }).catch((err) => {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "No se pudieron cargar las métricas.");
     }).finally(() => { if (!controller.signal.aborted) setCargando(false); });
     return () => controller.abort();
   }, [rango, recarga, localId]);
-  const resumen = useMemo(() => datos ? resumirMetricas(datos, rango, agrupacion) : null, [datos, rango, agrupacion]);
+  const resumen = useMemo(() => datos ? agruparMetricas(datos, rango, agrupacion) : null, [datos, rango, agrupacion]);
   const productos = useMemo(() => {
     const filas = [...(resumen?.productos ?? [])];
     return ordenProductos === "importe" ? filas.sort((a, b) => b.importe - a.importe || b.cantidad - a.cantidad) : filas;

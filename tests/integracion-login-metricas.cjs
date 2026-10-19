@@ -24,6 +24,8 @@ const baseURL = process.env.TEST_BASE_URL ?? 'http://localhost:5173';
       if (parsed.pathname.endsWith('/logout')) return route.fulfill({ status: 204, body: '' });
       if (parsed.pathname.endsWith('/auth/v1/user')) return route.fulfill({ json: current?.user ?? null });
       if (parsed.pathname.endsWith('/usuarios_locales')) return route.fulfill({ json: current ? { local_id: current.localId, rol: 'admin', activo: true, locales: { id: current.localId, nombre: current.nombre, activo: true } } : null });
+      if (parsed.pathname.endsWith('/rpc/mis_permisos')) return route.fulfill({json:{local_id:current.localId,administrador:true,rol_nombre:'Administrador',permisos:[]}});
+      if (parsed.pathname.endsWith('/rpc/resumen_metricas')) return route.fulfill({json:{totalVentas:0,cantidadVentas:0,totalCobros:0,totalGastos:0,cantidadGastos:0,dias:[],productos:[],medios:[],categorias:[]}});
       if (parsed.pathname.endsWith('/salones')) return route.fulfill({ json: [{ id: 'salon', nombre: 'Salón', activo: true }] });
       return route.fulfill({ json: [] });
     });
@@ -39,10 +41,7 @@ const baseURL = process.env.TEST_BASE_URL ?? 'http://localhost:5173';
       await page.goto(`${baseURL}/metricas`);
       await page.getByRole('heading', { name: 'Evolución de ventas' }).waitFor();
       assert.equal(await page.locator('.mesas-spa-brand').innerText(), current.nombre);
-      for (const table of ['pedidos', 'pedido_pagos', 'gastos']) {
-        const request = requests.find(url => url.pathname.endsWith(`/${table}`));
-        assert.equal(request?.searchParams.get('local_id'), `eq.${current.localId}`, table);
-      }
+      assert(requests.some(url=>url.pathname.endsWith('/rpc/resumen_metricas')));
       await page.getByRole('link', { name: 'Configuración', exact: true }).click();
       await page.locator('aside').getByRole('button', { name: 'Usuarios', exact: true }).click();
       await page.getByRole('heading', { name: 'Usuarios', exact: true }).waitFor();

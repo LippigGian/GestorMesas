@@ -91,3 +91,9 @@ test('paginación recupera más de mil registros sin repetir ni perder filas', a
   assert.deepEqual(calls, [[0, 499], [500, 999], [1000, 1499]]);
   await assert.rejects(leerPaginas(async () => ({ data: null, error: { message: 'Sin acceso' } })), /Sin acceso/);
 });
+
+test('agregados autorizados conservan totales, días vacíos y agrupación mensual sin ventas individuales',()=>{
+ const datos={totalVentas:300,cantidadVentas:2,totalCobros:300,totalGastos:20,cantidadGastos:1,dias:[{fecha:'2026-10-01',importe:100,cantidad:1},{fecha:'2026-10-03',importe:200,cantidad:1}],productos:[],medios:[],categorias:[]};
+ const diario=metricas.agruparMetricas(datos,rango,'dia'),mensual=metricas.agruparMetricas(datos,rango,'mes');
+ assert.deepEqual(diario.periodos.map(d=>d.importe),[100,0,200]);assert.equal(mensual.periodos[0].importe,300);assert.equal(diario.ticketPromedio,150);
+});

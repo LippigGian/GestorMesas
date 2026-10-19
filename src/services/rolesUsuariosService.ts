@@ -1,3 +1,4 @@
+import { validarPermisos } from "@/lib/permisos";
 import type { RolUsuario } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
@@ -12,11 +13,16 @@ type RolUsuarioRow = {
 function mapRolUsuario(row: RolUsuarioRow): RolUsuario {
   return {
     id: row.id,
-    nombre: row.nombre,
+    // Compatibilidad con los roles guardados antes del cambio de nombre.
+    nombre: nombreVisibleRolUsuario(row.nombre),
     descripcion: row.descripcion ?? undefined,
     permisos: row.permisos ?? [],
     activo: row.activo,
   };
+}
+
+export function nombreVisibleRolUsuario(nombre: string) {
+  return normalizarNombreRolUsuario(nombre) === "mozo" ? "Camarero" : nombre;
 }
 
 export function normalizarNombreRolUsuario(nombre: string) {
@@ -77,7 +83,7 @@ export async function crearRolUsuario(input: {
     .insert({
       nombre,
       descripcion: descripcion || null,
-      permisos: input.permisos ?? [],
+      permisos: validarPermisos(input.permisos ?? []),
       activo: true,
     })
     .select("id, nombre, descripcion, permisos, activo")
@@ -108,7 +114,7 @@ export async function actualizarRolUsuario(input: {
     .update({
       nombre,
       descripcion: descripcion || null,
-      permisos: input.permisos ?? [],
+      permisos: validarPermisos(input.permisos ?? []),
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.rolId)

@@ -1,5 +1,6 @@
 import type { UsuarioSistema } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { nombreVisibleRolUsuario } from "@/services/rolesUsuariosService";
 
 type UsuarioSistemaRow = {
   id: string;
@@ -22,7 +23,7 @@ function mapUsuario(row: UsuarioSistemaRow): UsuarioSistema {
     nombre: row.nombre,
     email: row.email,
     rolId: row.rol_id ?? undefined,
-    rolNombre: rol?.nombre,
+    rolNombre: rol?.nombre ? nombreVisibleRolUsuario(rol.nombre) : undefined,
     activo: row.activo,
   };
 }

@@ -32,3 +32,14 @@ test('requiere mayúscula y acepta letras como Ñ sin exigir números ni símbol
   assert.equal(validarNuevaPassword('Abcdef', 'Abcdef'), null);
   assert.equal(validarNuevaPassword('Ñabcde', 'Ñabcde'), null);
 });
+
+test('recuperación informa fallos vacíos, servidor, SMTP y límites sin inventar la causa',()=>{
+ const mensaje=exportsModule.errorEnvioRecuperacion;
+ assert.match(mensaje({message:'{}',status:500}),/HTTP 500/);
+ assert.match(mensaje({message:'{}'}),/No se pudo solicitar/);
+ assert.match(mensaje({message:'Error sending recovery email'}),/registros de Auth/);
+ assert.match(mensaje({status:429}),/límite/);
+ assert.match(mensaje({code:'email_address_not_authorized'}),/destinatario/);
+ assert.equal(mensaje(new Error('Mensaje específico')),'Mensaje específico');
+ assert.match(mensaje(null),/No se pudo solicitar/);
+});

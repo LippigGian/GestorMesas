@@ -665,6 +665,11 @@ export async function registrarPagoParcialPedido(
   itemsCobrados: ItemCobroParcialInput[] = []
 ): Promise<number> {
   validarPagosPedido(pagos);
+  if (!localId) throw new Error("No hay un local activo configurado.");
+  const cobro = await supabase.rpc("cobrar_pedido", { p_pedido_id: pedidoId, p_pagos: pagos, p_cerrar: false, p_items: itemsCobrados });
+  if (!cobro.error) return Number(cobro.data);
+  if (cobro.error.code !== "PGRST202") throw new Error(cobro.error.message);
+  // Compatibilidad temporal con instalaciones anteriores a la migración 05.
   const total = await recalcularTotalPedido(pedidoId);
   const pagadoActual = await obtenerTotalPagadoPedido(pedidoId);
   const totalNuevo = pagos.reduce((acc, pago) => acc + pago.monto, 0);
@@ -873,6 +878,11 @@ export async function cerrarPedido(
   pagos: PagoPedidoInput[],
   localId: string
 ): Promise<void> {
+  validarPagosPedido(pagos);
+  if (!localId) throw new Error("No hay un local activo configurado.");
+  const cobro = await supabase.rpc("cobrar_pedido", { p_pedido_id: pedidoId, p_pagos: pagos, p_cerrar: true, p_items: [] });
+  if (!cobro.error) return;
+  if (cobro.error.code !== "PGRST202") throw new Error(cobro.error.message);
   const total = await recalcularTotalPedido(pedidoId);
   const arqueoCajaId = await obtenerArqueoPedidoParaPago(pedidoId, localId);
   const closedAt = new Date();

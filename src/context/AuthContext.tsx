@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { esEnlaceRecuperacion, urlRecuperacion, validarNuevaPassword } from "@/lib/recuperacionPassword";
+import { esEnlaceRecuperacion, urlRecuperacion, validarNuevaPassword, errorEnvioRecuperacion } from "@/lib/recuperacionPassword";
 import { AVISO_REGISTRO_PENDIENTE, errorRegistroCuenta } from "@/lib/registroCuenta";
+import { diagnosticoCarga } from "@/lib/diagnosticoCarga";
 
 type AuthContextType = {
   user: User | null;
@@ -12,6 +13,8 @@ type AuthContextType = {
   crearCuenta: (email: string, password: string, nombreLocal: string) => Promise<string | null>;
   recuperarPassword: (email: string) => Promise<void>;
   recuperandoPassword: boolean;
+  aceptandoInvitacion: boolean;
+  finalizarInvitacion: () => void;
   actualizarPassword: (password: string) => Promise<void>;
   finalizarRecuperacion: () => void;
   cerrarSesion: () => Promise<void>;
@@ -24,11 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [recuperandoPassword, setRecuperandoPassword] = useState(() => esEnlaceRecuperacion(window.location.hash));
 
+  const [aceptandoInvitacion, setAceptandoInvitacion] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("type") === "invite");
+
   useEffect(() => {
     let mounted = true;
 
     async function cargarSesion() {
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await diagnosticoCarga.medir("Recuperar sesión", () => supabase.auth.getSession());
 
       if (!mounted) return;
 
@@ -46,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event, nuevaSesion) => {
       if (!mounted) return;
       if (event === "PASSWORD_RECOVERY") setRecuperandoPassword(true);
-      if (event === "SIGNED_OUT") setRecuperandoPassword(false);
+      if (event === "SIGNED_OUT") { setRecuperandoPassword(false); setAceptandoInvitacion(false); }
       setSession(nuevaSesion);
       setCargandoAuth(false);
     });
@@ -103,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(errorEnvioRecuperacion(error));
     }
   }
 
@@ -131,11 +136,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       crearCuenta,
       recuperarPassword,
       recuperandoPassword,
+      aceptandoInvitacion,
+      finalizarInvitacion: () => setAceptandoInvitacion(false),
       actualizarPassword,
       finalizarRecuperacion: () => setRecuperandoPassword(false),
       cerrarSesion,
     }),
-    [cargandoAuth, session, recuperandoPassword]
+    [cargandoAuth, session, recuperandoPassword, aceptandoInvitacion]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Local } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
 import { obtenerLocalDelUsuario } from "@/services/localesService";
+import { diagnosticoCarga } from "@/lib/diagnosticoCarga";
 
 type LocalContextType = {
   local: Local | null;
@@ -43,7 +44,7 @@ function LocalDelUsuarioProvider({ children, usuarioId, cargandoAuth }: {
       try {
         setCargandoLocal(true);
         setErrorLocal(null);
-        const localActivo = await obtenerLocalDelUsuario(usuarioId);
+        const localActivo = await diagnosticoCarga.medir("Cargar cafetería", () => obtenerLocalDelUsuario(usuarioId));
 
         if (!mounted) return;
 

@@ -27,7 +27,8 @@ export type Local = {
   activo: boolean;
 };
 
-export type RolUsuarioLocal = 'admin' | 'encargado' | 'mozo';
+// 'mozo' es el código heredado en usuarios_locales; su nombre visible es Camarero.
+export type RolUsuarioLocal = 'admin' | 'empleado' | 'encargado' | 'cajero' | 'mozo' | 'camarero';
 
 export type UsuarioLocal = {
   id: string;

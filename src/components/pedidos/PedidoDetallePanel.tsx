@@ -1,3 +1,4 @@
+import { usePermisos } from "@/context/PermisosContext";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MessageSquare, Minus, Percent, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,7 @@ export function PedidoDetallePanel({
   const [confirmando, setConfirmando] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
+  const { tiene } = usePermisos();
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendienteUI[]>([]);
   useEffect(() => {
     onPendientesChange?.(itemsPendientes.length > 0);
@@ -565,6 +567,7 @@ export function PedidoDetallePanel({
                             className="h-9 w-24 text-right"
                             inputMode="decimal"
                             aria-label={`Total pendiente de ${item.nombreProducto}`}
+                            readOnly={!tiene("editar_precios")}
                             value={item.totalInput}
                             onChange={(event) => {
                               const value = event.target.value;
@@ -632,7 +635,7 @@ export function PedidoDetallePanel({
           </div>
 
           <div className="p-4">
-            {mostrandoDescuento && onAplicarDescuento && (
+            {mostrandoDescuento && tiene("aplicar_descuentos") && onAplicarDescuento && (
               <div className="mb-3 rounded-md border bg-muted/40 p-3">
                 <div className="mb-3 flex gap-2">
                   <Button
@@ -724,7 +727,7 @@ export function PedidoDetallePanel({
                   )}
                   <div className="flex justify-end">
                     <Button
-                      disabled={itemActualizandoId === itemDescuento?.id}
+                      disabled={itemActualizandoId === itemDescuento?.id || !tiene("aplicar_descuentos") || aplicandoDescuento}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -741,7 +744,7 @@ export function PedidoDetallePanel({
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              {onAplicarDescuento && (
+              {tiene("aplicar_descuentos") && onAplicarDescuento && (
                 <Button
                   variant="secondary"
                   onClick={() => {

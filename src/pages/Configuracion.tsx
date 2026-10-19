@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { usePermisos } from "@/context/PermisosContext";
 import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
@@ -57,7 +59,7 @@ const seccionesConfiguracion: ConfiguracionSeccion[] = [
   {
     id: "usuarios",
     nombre: "Usuarios",
-    descripcion: "Alta, baja y modificacion de usuarios del sistema.",
+    descripcion: "Invitaciones, roles y acceso de tu equipo.",
     icono: UserRound,
   },
   {
@@ -94,7 +96,14 @@ const seccionesConfiguracion: ConfiguracionSeccion[] = [
 
 export function Configuracion() {
   const { cargandoLocal, errorLocal, localId } = useLocal();
-  const [seccionActivaId, setSeccionActivaId] = useState(seccionesConfiguracion[0].id);
+  const { tiene } = usePermisos();
+  const [params] = useSearchParams();
+  const solicitada = params.get("seccion");
+  const [seccionElegida, setSeccionActivaId] = useState(solicitada ?? seccionesConfiguracion[0].id);
+  const seccionesVisibles = seccionesConfiguracion.filter(s =>
+    ["usuarios", "roles"].includes(s.id) ? tiene("gestionar_usuarios") : s.id === "proveedores" ? tiene("gestionar_gastos") : tiene("modificar_configuracion_general"));
+  const seccionActivaId = seccionesVisibles.some(s => s.id === seccionElegida) ? seccionElegida : seccionesVisibles[0]?.id ?? "";
+  useEffect(() => { if (solicitada) setSeccionActivaId(solicitada); }, [solicitada]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [nuevoMedioPago, setNuevoMedioPago] = useState("");
   const [cargandoMediosPago, setCargandoMediosPago] = useState(false);
@@ -342,7 +351,7 @@ export function Configuracion() {
       <aside className="w-72 border-r bg-card p-4 shadow-sm">
         <h1 className="mb-4 text-xl font-bold text-foreground">Configuracion</h1>
         <nav className="space-y-1">
-          {seccionesConfiguracion.map((seccion) => {
+          {seccionesVisibles.map((seccion) => {
             const Icono = seccion.icono;
             const activa = seccion.id === seccionActivaId;
 
@@ -379,7 +388,7 @@ export function Configuracion() {
           ) : seccionActivaId === "cajas" ? (
             <ConfiguracionCajas />
           ) : seccionActivaId === "usuarios" ? (
-            <ConfiguracionUsuarios />
+            <ConfiguracionUsuarios onCrearRol={() => setSeccionActivaId("roles")} />
           ) : seccionActivaId === "roles" ? (
             <ConfiguracionRolesUsuarios />
           ) : seccionActivaId === "turnos" ? (

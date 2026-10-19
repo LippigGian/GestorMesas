@@ -83,8 +83,7 @@ function validarInputGasto(input: GastoInput) {
 
 async function obtenerArqueoAbiertoId(localId: string) {
   const { data, error } = await supabase
-    .from("arqueos_caja")
-    .select("id")
+    .rpc("listar_arqueos_operativos")
     .eq("local_id", localId)
     .eq("estado", "abierto");
 
@@ -105,8 +104,7 @@ async function obtenerArqueoAbiertoId(localId: string) {
 
 async function asegurarArqueoAbierto(arqueoCajaId: string) {
   const { data, error } = await supabase
-    .from("arqueos_caja")
-    .select("estado")
+    .rpc("listar_arqueos_operativos")
     .eq("id", arqueoCajaId)
     .single();
 
@@ -114,7 +112,7 @@ async function asegurarArqueoAbierto(arqueoCajaId: string) {
     throw new Error(error.message);
   }
 
-  if (data.estado !== "abierto") {
+  if (!data || (data as { estado: string }).estado !== "abierto") {
     throw new Error("No se puede modificar un gasto de un arqueo cerrado.");
   }
 }

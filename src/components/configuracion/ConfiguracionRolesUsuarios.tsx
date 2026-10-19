@@ -1,7 +1,9 @@
+import {usePermisos} from "@/context/PermisosContext";
 import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { permisosDisponibles } from "@/lib/permisos";
 import type { RolUsuario } from "@/lib/types";
 import {
   activarRolUsuario,
@@ -14,19 +16,10 @@ import {
   validarNombreRolUsuario,
 } from "@/services/rolesUsuariosService";
 
-const permisosDisponibles = [
-  { id: "editar_precios", nombre: "Editar precios" },
-  { id: "ver_saldos_arqueo", nombre: "Ver saldos de arqueo" },
-  { id: "abrir_cerrar_caja", nombre: "Abrir y cerrar caja" },
-  { id: "aplicar_descuentos", nombre: "Aplicar descuentos" },
-  { id: "editar_productos", nombre: "Crear y editar productos" },
-  { id: "editar_mesas", nombre: "Editar layout de mesas" },
-  { id: "ver_ventas", nombre: "Ver ventas" },
-  { id: "gestionar_gastos", nombre: "Gestionar gastos" },
-  { id: "gestionar_usuarios", nombre: "Gestionar usuarios y roles" },
-];
 
 export function ConfiguracionRolesUsuarios() {
+  const {administrador,tiene}=usePermisos();
+  const puedeGestionarRol=(rol:RolUsuario)=>administrador || rol.permisos.every(p=>tiene(p as Parameters<typeof tiene>[0]));
   const [roles, setRoles] = useState<RolUsuario[]>([]);
   const [rolEditando, setRolEditando] = useState<RolUsuario | null>(null);
   const [nombre, setNombre] = useState("");
@@ -231,6 +224,10 @@ export function ConfiguracionRolesUsuarios() {
 
         <div>
           <p className="mb-2 text-sm font-semibold">Caracteristicas del rol</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Editar precios permite cambiar el precio al adicionar un producto al pedido.
+            Para modificar el catálogo, usá Crear y editar productos.
+          </p>
           <div className="grid gap-2 md:grid-cols-3">
             {permisosDisponibles.map((permiso) => (
               <label
@@ -239,6 +236,7 @@ export function ConfiguracionRolesUsuarios() {
               >
                 <input
                   checked={permisos.includes(permiso.id)}
+                  disabled={guardando || !tiene(permiso.id)}
                   type="checkbox"
                   onChange={() => alternarPermiso(permiso.id)}
                 />
@@ -249,7 +247,7 @@ export function ConfiguracionRolesUsuarios() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-sm">
           <thead className="bg-secondary text-secondary-foreground">
             <tr>
@@ -293,7 +291,7 @@ export function ConfiguracionRolesUsuarios() {
                   <td className="p-3">
                     <div className="flex justify-end gap-2">
                       <Button
-                        disabled={guardando}
+                        disabled={guardando || !puedeGestionarRol(rol)}
                         size="sm"
                         type="button"
                         variant="outline"
@@ -310,7 +308,7 @@ export function ConfiguracionRolesUsuarios() {
                       </Button>
                       {rol.activo ? (
                         <Button
-                          disabled={guardando}
+                          disabled={guardando || !puedeGestionarRol(rol)}
                           size="sm"
                           type="button"
                           variant="destructive"
@@ -320,7 +318,7 @@ export function ConfiguracionRolesUsuarios() {
                         </Button>
                       ) : (
                         <Button
-                          disabled={guardando}
+                          disabled={guardando || !puedeGestionarRol(rol)}
                           size="sm"
                           type="button"
                           variant="secondary"

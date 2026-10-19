@@ -1,3 +1,6 @@
+import { usePermisos } from "@/context/PermisosContext";
+import { CajaOperativa } from "@/components/ventas/CajaOperativa";
+import { IndicadorEstadoCaja } from "@/components/ventas/IndicadorEstadoCaja";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Filter, Plus, ReceiptText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -139,7 +142,7 @@ function crearPagosEdicionDesdeVenta(venta: VentaResumen, medioPagoDefaultId: st
   }));
 }
 
-export function Ventas() {
+function VentasAdministrador() {
   const { cargandoLocal, errorLocal, localId } = useLocal();
   const [tabActiva, setTabActiva] = useState<VentasTab>("ventas");
   const [arqueos, setArqueos] = useState<ArqueoCaja[]>([]);
@@ -1097,7 +1100,8 @@ function VentaDetalle({
   onQuitarPagoEdicion: (pagoId: string) => void;
   onActualizarPagoEdicion: (pagoId: string, patch: Partial<Omit<PagoEdicion, "id">>) => void;
 }) {
-  const puedeEditarPagos =
+  const {administrador}=usePermisos();
+  const puedeEditarPagos = administrador &&
     venta.estado === "cerrado" && venta.pagos.some((pago) => Boolean(pago.arqueoCajaId));
   const pagosAgrupados = agruparPagosPorMedio(venta);
   const totalPagosEdicion = pagosEdicion.reduce((acc, pago) => {
@@ -1303,4 +1307,25 @@ function DetalleVacio() {
       </div>
     </aside>
   );
+}
+
+export function Ventas() {
+  const {administrador,tiene}=usePermisos();
+  const [tab,setTab]=useState(()=>tiene("ver_ventas") ? "ventas" : "caja");
+  const [revisionEstado,setRevisionEstado]=useState(0);
+  if (administrador) return <VentasAdministrador />;
+  const ventas=tiene("ver_ventas");
+  const caja=tiene("abrir_cerrar_caja") || tiene("ver_saldos_arqueo");
+  return <main className="min-h-[calc(100vh-128px)] bg-background">
+    <nav aria-label="Secciones de ventas" className="flex flex-wrap items-center gap-2 border-b bg-primary px-4 py-2 text-primary-foreground">
+      {ventas && <Button variant={tab === "ventas" ? "secondary":"ghost"}
+        className="text-primary-foreground data-[active=true]:text-secondary-foreground"
+        data-active={tab === "ventas"} aria-pressed={tab === "ventas"} onClick={()=>setTab("ventas")}>Ventas</Button>}
+      {caja && <Button variant={tab === "caja" ? "secondary":"ghost"}
+        className="text-primary-foreground data-[active=true]:text-secondary-foreground"
+        data-active={tab === "caja"} aria-pressed={tab === "caja"} onClick={()=>setTab("caja")}>Arqueos de Caja</Button>}
+      <IndicadorEstadoCaja revision={revisionEstado} />
+    </nav>
+    <div className="p-4 md:p-8">{ventas && (tab === "ventas" || !caja) ? <VentasView/> : caja ? <CajaOperativa onEstadoCajaActualizado={()=>setRevisionEstado(n=>n+1)}/> : null}</div>
+  </main>;
 }

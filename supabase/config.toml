@@ -1,0 +1,3 @@
+[functions.invitar-empleado]
+# El handler verifica el JWT contra Auth con getUser y la autorización en SQL.
+verify_jwt = false

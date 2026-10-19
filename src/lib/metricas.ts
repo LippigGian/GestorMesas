@@ -95,3 +95,20 @@ export function resumirMetricas(datos: DatosMetricas, rango: RangoMetricas, agru
     categorias: preparar(categorias.values()).sort((a, b) => b.importe - a.importe),
   };
 }
+
+export type MetricasAgregadas = Omit<ReturnType<typeof resumirMetricas>, "periodos" | "ticketPromedio"> & { dias: {fecha:string; importe:number; cantidad:number}[] };
+export function agruparMetricas(datos: MetricasAgregadas, rango: RangoMetricas, agrupacion: "dia" | "mes") {
+  const error = validarRango(rango);
+  if (error) throw new Error(error);
+  const periodos = new Map<string, {fecha:string; importe:number; cantidad:number}>();
+  for (let fecha=rango.desde; fecha<=rango.hasta; fecha=desplazarFecha(fecha,1)) {
+    const key=fecha.slice(0,agrupacion === "mes" ? 7 : 10);
+    if (!periodos.has(key)) periodos.set(key,{fecha:key,importe:0,cantidad:0});
+  }
+  for (const dia of datos.dias) {
+    const periodo=periodos.get(dia.fecha.slice(0,agrupacion === "mes" ? 7 : 10));
+    if (periodo) { periodo.importe+=Number(dia.importe); periodo.cantidad+=Number(dia.cantidad); }
+  }
+  return {...datos, ticketPromedio:datos.cantidadVentas ? redondear(datos.totalVentas/datos.cantidadVentas):0,
+    periodos:[...periodos.values()].map(p=>({...p,importe:redondear(p.importe)}))};
+}

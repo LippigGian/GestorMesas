@@ -45,3 +45,11 @@ export async function obtenerMetricas(rango: RangoMetricas, signal: AbortSignal,
     gastos: gastos.map((gasto) => ({ categoria: gasto.categoria ?? "", importe: Number(gasto.importe) })),
   };
 }
+
+export async function obtenerMetricasAgregadas(rango: RangoMetricas, signal: AbortSignal): Promise<import("@/lib/metricas").MetricasAgregadas> {
+  limitesRango(rango);
+  const {data,error}=await supabase.rpc("resumen_metricas",{p_desde:rango.desde,p_hasta:rango.hasta}).abortSignal(signal);
+  if (error) throw new Error(error.message);
+  if (!data || !Array.isArray(data.dias) || !Array.isArray(data.productos) || !Array.isArray(data.medios) || !Array.isArray(data.categorias)) throw new Error("No se pudo obtener el resumen de métricas.");
+  return data;
+}

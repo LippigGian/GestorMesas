@@ -29,6 +29,7 @@ import {
   desactivarSalon,
   normalizarNombreSalon,
 } from "@/services/salonesService";
+import { usePermisos } from "@/context/PermisosContext";
 import { useAuth } from "@/context/AuthContext";
 
 type NavbarProps = {
@@ -76,16 +77,25 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
   const [guardandoSalon, setGuardandoSalon] = useState(false);
   const [errorGestionSalones, setErrorGestionSalones] = useState<string | null>(null);
   const { cerrarSesion, user } = useAuth();
+  const { tiene } = usePermisos();
+  const puedeConfigurar = tiene("gestionar_usuarios") || tiene("gestionar_gastos") || tiene("modificar_configuracion_general");
 
   const navButtonClass = "navbar-link";
   const navigation = [
     { to: "/", label: "Mesas", icon: LayoutGrid },
     { to: "/mostrador", label: "Mostrador", icon: ShoppingBag },
     { to: "/productos", label: "Productos", icon: UtensilsCrossed },
-    { to: "/ventas", label: "Ventas", icon: BarChart3 },
+    { to: "/ventas", label: tiene("ver_ventas") ? "Ventas" : "Caja", icon: BarChart3 },
     { to: "/metricas", label: "Métricas", icon: ChartNoAxesCombined },
     { to: "/gastos", label: "Gastos", icon: Calculator },
   ];
+  const navigationVisible = navigation.filter(({ to }) => {
+    if (to === "/productos") return tiene("editar_productos");
+    if (to === "/ventas") return tiene("ver_ventas") || tiene("ver_saldos_arqueo") || tiene("abrir_cerrar_caja");
+    if (to === "/metricas") return tiene("ver_metricas");
+    if (to === "/gastos") return tiene("gestionar_gastos");
+    return true;
+  });
   const salonEditando = salones.find((salon) => salon.id === salonEditandoId);
 
   const limpiarFormularioSalon = () => {
@@ -167,7 +177,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           </span>
         </Link>
         <nav className="navbar-primary" aria-label="Navegación principal">
-          {navigation.map(({ to, label, icon: Icon }) => (
+          {navigationVisible.map(({ to, label, icon: Icon }) => (
             <Button key={to} asChild variant="ghost" className={navButtonClass}
               data-active={location.pathname === to}>
               <Link to={to} aria-current={location.pathname === to ? "page" : undefined}>
@@ -180,16 +190,17 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
           <details ref={menuAccesosRef} className="navbar-more">
             <summary aria-label="Más accesos" title="Más accesos"><MoreHorizontal className="h-5 w-5" aria-hidden="true" /></summary>
             <div className="navbar-more-panel">
-              <Button variant="ghost" type="button"><Users className="h-4 w-4" aria-hidden="true" />Usuarios</Button>
+              {tiene("gestionar_usuarios") && <Button asChild variant="ghost"><Link to="/configuracion?seccion=usuarios"><Users className="h-4 w-4" aria-hidden="true" />Usuarios</Link></Button>}
               <Button variant="ghost" type="button"><Truck className="h-4 w-4" aria-hidden="true" />Delivery</Button>
             </div>
           </details>
-          <Button asChild variant="ghost" size="icon" data-active={location.pathname === "/configuracion"}>
+          {puedeConfigurar && <Button asChild variant="ghost" size="icon" data-active={location.pathname === "/configuracion"}>
             <Link to="/configuracion" title="Configuración" aria-label="Configuración"
               aria-current={location.pathname === "/configuracion" ? "page" : undefined}>
               <Settings className="h-5 w-5" aria-hidden="true" />
             </Link>
           </Button>
+          }
           <Button variant="ghost" size="icon" title={user?.email ? `Cerrar sesión (${user.email})` : "Cerrar sesión"} aria-label="Cerrar sesión" onClick={() => { cerrarSesion().catch(() => window.alert("No se pudo cerrar la sesión. Intentá nuevamente.")); }}>
             <LogOut className="h-5 w-5" aria-hidden="true" />
           </Button>
@@ -225,7 +236,7 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
                 <span aria-hidden="true">·</span>
                 {new Date().toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
               </span>
-            <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary" className="navbar-edit" aria-pressed={modoEdicion}>
+            {tiene("editar_mesas") && <Button onClick={() => setModoEdicion((prev) => !prev)} variant="secondary" className="navbar-edit" aria-pressed={modoEdicion}>
               {modoEdicion ? (
                 <>
                   <Save className="h-4 w-4" />
@@ -238,7 +249,8 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
                 </>
               )}
             </Button>
-            {modoEdicion && (
+            }
+            {modoEdicion && tiene("editar_mesas") && (
               <Button
                 type="button"
                 variant="secondary"
@@ -254,10 +266,10 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
             </div>
           </div>
 
-          {(errorSalones || (modoEdicion && mostrandoSalones)) && (
+          {(errorSalones || (modoEdicion && tiene("editar_mesas") && mostrandoSalones)) && (
             <div className="mt-2 rounded-md border border-white/15 bg-background p-3 text-foreground shadow-sm">
               {errorSalones && <p className="mb-2 text-sm text-destructive">{errorSalones}</p>}
-              {modoEdicion && mostrandoSalones && (
+              {modoEdicion && tiene("editar_mesas") && mostrandoSalones && (
                 <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
                   <div className="rounded-md border bg-card p-3">
                     <p className="mb-2 text-sm font-semibold">
