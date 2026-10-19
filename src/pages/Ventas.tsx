@@ -1,3 +1,4 @@
+import { SaldoSistemaArqueo, DiferenciaSaldoArqueo, type ResultadoSaldoArqueo } from "@/components/ventas/SaldoSistemaArqueo";
 import { DistintivoRectificacion, SelectorRectificaciones } from "@/components/ventas/DistintivoRectificacion";
 import { filtrarPorRectificacion, type FiltroRectificaciones } from "@/lib/filtroRectificaciones";
 import { usePermisos } from "@/context/PermisosContext";
@@ -834,6 +835,8 @@ function ArqueosCajaView({
   setFechaHoraApertura,
   setMontoInicial,
 }: ArqueosCajaViewProps) {
+  const { localId } = useLocal();
+  const [saldoSistema, setSaldoSistema] = useState<ResultadoSaldoArqueo | null>(null);
   const [filtroRectificaciones,setFiltroRectificaciones]=useState<FiltroRectificaciones>("todos");
   const arqueosFiltrados=filtrarPorRectificacion(arqueos,filtroRectificaciones);
   const arqueoAbierto = arqueos.find((arqueo) => arqueo.estado === "abierto") ?? null;
@@ -851,12 +854,13 @@ function ArqueosCajaView({
         <section className="self-start overflow-hidden rounded-2xl border bg-card">
           <div className="border-b bg-secondary/40 p-5 sm:p-6"><h2 className="text-sm font-semibold">Estado actual</h2><p className="mt-5 text-xl font-bold">{arqueoAbierto ? cajaActual?.nombre ?? "Caja abierta" : "No hay una caja abierta"}</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{arqueoAbierto ? `Abierta desde ${formatearFecha(arqueoAbierto.openedAt)}.` : "Abrí una caja para empezar a registrar cobros."}</p></div>
           <div className="grid grid-cols-2 gap-4 p-5 text-sm sm:p-6"><ResumenDato label="Arqueos" value={`${arqueos.length}`} /><ResumenDato label="Saldo actual" value={formatearMoneda(saldoActual)} /><ResumenDato label="Ventas" value={formatearMoneda(totalVentas)} /><ResumenDato label="Estado" value={arqueoAbierto ? "Abierto" : "Cerrado"} /></div>
+          {arqueoAbierto && <div className="px-5 pb-5 sm:px-6 sm:pb-6"><SaldoSistemaArqueo key={arqueoAbierto.id} arqueoId={arqueoAbierto.id} onResultadoChange={setSaldoSistema} /></div>}
         </section>
 
         <form className="overflow-hidden rounded-2xl border bg-card" onSubmit={(event) => { event.preventDefault(); if (arqueoAbierto) onCerrarArqueo(); else onAbrirArqueo(); }}>
           <div className="border-b p-5 sm:p-6"><h2 className="text-lg font-bold">{arqueoAbierto ? "Cerrar caja" : "Abrir caja"}</h2><p className="mt-1 text-sm text-muted-foreground">{arqueoAbierto ? "Ingresá los importes contados por cada medio de pago." : "Indicá la caja, el momento de apertura y el fondo inicial."}</p></div>
           <div className="space-y-5 p-5 sm:p-6">
-            {arqueoAbierto ? <div className="grid gap-4 sm:grid-cols-2">{mediosPago.map((medio) => <div key={medio.id} className="space-y-2"><label htmlFor={`cierre-${medio.id}`} className="block text-sm font-medium">{medio.nombre}</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id={`cierre-${medio.id}`} className="min-h-11 pl-8 tabular-nums" required disabled={guardando} inputMode="decimal" placeholder="0,00" value={declaracionesCierre[medio.id] ?? ""} onChange={(event) => { const value = event.target.value; if (esMontoPositivoInput(value)) setDeclaracionCierre(medio.id, value); }} /></div></div>)}</div> : <>
+            {arqueoAbierto ? <div className="grid gap-4 sm:grid-cols-2">{mediosPago.map((medio) => <div key={medio.id} className="space-y-2"><label htmlFor={`cierre-${medio.id}`} className="block text-sm font-medium">{medio.nombre}</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id={`cierre-${medio.id}`} className="min-h-11 pl-8 tabular-nums" required disabled={guardando} inputMode="decimal" placeholder="0,00" value={declaracionesCierre[medio.id] ?? ""} onChange={(event) => { const value = event.target.value; if (esMontoPositivoInput(value)) setDeclaracionCierre(medio.id, value); }} /></div><DiferenciaSaldoArqueo declarado={declaracionesCierre[medio.id] ?? ""} esperado={saldoSistema?.arqueoId === arqueoAbierto.id && saldoSistema.localId === localId ? saldoSistema.medios.find(m=>m.medioPagoId === medio.id)?.monto : undefined} /></div>)}</div> : <>
               <div className="space-y-2"><label htmlFor="arqueo-caja" className="block text-sm font-medium">Caja</label><select id="arqueo-caja" required disabled={guardando} className="min-h-11 w-full rounded-md border bg-background px-3 text-base" value={cajaId} onChange={(event) => setCajaId(event.target.value)}>{cajasActivas.length === 0 && <option value="">Sin cajas activas</option>}{cajasActivas.map((caja) => <option key={caja.id} value={caja.id}>{caja.nombre}</option>)}</select></div>
               <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor="arqueo-fecha" className="block text-sm font-medium">Fecha y hora de apertura</label><Input id="arqueo-fecha" required disabled={guardando} type="datetime-local" value={fechaHoraApertura} onChange={(event) => setFechaHoraApertura(event.target.value)} /></div><div className="space-y-2"><label htmlFor="arqueo-inicial" className="block text-sm font-medium">Monto inicial</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id="arqueo-inicial" required disabled={guardando} className="min-h-11 pl-8 tabular-nums" inputMode="decimal" placeholder="0,00" value={montoInicial} onChange={(event) => { const value = event.target.value; if (esMontoPositivoInput(value)) setMontoInicial(value); }} /></div></div></div>
             </>}

@@ -1,6 +1,18 @@
 import type { ArqueoCaja, ArqueoCajaMedioPago } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
+export type SaldoSistemaMedio = { medioPagoId: string; nombre: string; monto: number };
+
+export async function obtenerSaldoSistemaArqueo(arqueoId: string): Promise<SaldoSistemaMedio[]> {
+  const { data, error } = await supabase.rpc("saldo_sistema_arqueo", { p_arqueo_id: arqueoId });
+  if (error) throw new Error(error.code === "PGRST202"
+    ? "Falta habilitar la consulta de saldos en Supabase (SQL 13)."
+    : error.message);
+  return (data ?? []).map((medio: { medio_pago_id: string; medio_pago_nombre: string; monto_sistema: number | string }) => ({
+    medioPagoId: medio.medio_pago_id, nombre: medio.medio_pago_nombre, monto: Number(medio.monto_sistema),
+  }));
+}
+
 type ArqueoCajaRow = {
   id: string;
   local_id: string | null;

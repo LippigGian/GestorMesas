@@ -1,3 +1,4 @@
+import { SaldoSistemaArqueo, DiferenciaSaldoArqueo, type ResultadoSaldoArqueo } from "@/components/ventas/SaldoSistemaArqueo";
 import {DistintivoRectificacion,SelectorRectificaciones} from "@/components/ventas/DistintivoRectificacion";
 import {filtrarPorRectificacion,type FiltroRectificaciones} from "@/lib/filtroRectificaciones";
 import {useEffect,useState} from "react";
@@ -15,6 +16,7 @@ type Operativo={id:string;caja_id:string;estado:string;opened_at:string;closed_a
 const monto=(value:string)=>{if(!/^\d+(?:[.,]\d{1,2})?$/.test(value)) throw new Error("Ingresá importes válidos con hasta dos decimales.");return Number(value.replace(",","."));};
 export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado?:()=>void}={}){
   const {localId}=useLocal(); const {tiene}=usePermisos();
+  const [saldoSistema, setSaldoSistema] = useState<ResultadoSaldoArqueo | null>(null);
   const [filtroRectificaciones,setFiltroRectificaciones]=useState<FiltroRectificaciones>("todos");
   const puedeOperar=tiene("abrir_cerrar_caja"),puedeVer=tiene("ver_saldos_arqueo");
   const [arqueos,setArqueos]=useState<Operativo[]>([]),[saldos,setSaldos]=useState<ArqueoCaja[]>([]);
@@ -63,6 +65,7 @@ export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado
           </div>
           <div className="space-y-4 p-5 sm:p-6">
             {abierto && <div className="flex items-start gap-3"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true"/><div><p className="text-xs text-muted-foreground">Apertura actual</p><p className="mt-1 text-sm font-medium">{fecha(abierto.opened_at)}</p></div></div>}
+            {abierto && puedeVer && <SaldoSistemaArqueo key={`${localId}-${abierto.id}`} arqueoId={abierto.id} revision={revision} onResultadoChange={setSaldoSistema} />}
             <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true"/><p className="text-sm leading-relaxed text-muted-foreground">{abierto ? "Al finalizar, registrá los importes contados por medio de pago." : "La apertura y el cierre mantienen organizados los movimientos de cada jornada."}</p></div>
           </div>
         </section>
@@ -70,7 +73,7 @@ export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado
           <div className="border-b p-5 sm:p-6"><h2 id="operacion-caja-titulo" className="text-lg font-bold">{abierto?"Cerrar caja":"Abrir caja"}</h2><p className="mt-1 text-sm text-muted-foreground">{abierto?"Ingresá los importes contados en cada medio de pago.":"Prepará tu caja antes de registrar los cobros."}</p></div>
           <div className="space-y-5 p-5 sm:p-6">
             {abierto?<div className="grid gap-4 sm:grid-cols-2">
-              {medios.map(m=><div key={m.id} className="space-y-2"><label htmlFor={`cierre-medio-${m.id}`} className="block text-sm font-medium">{m.nombre}</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id={`cierre-medio-${m.id}`} className="min-h-11 pl-8 tabular-nums" inputMode="decimal" placeholder="0,00" required disabled={guardando} value={declaraciones[m.id] ?? ""} onChange={e=>setDeclaraciones({...declaraciones,[m.id]:e.target.value})}/></div></div>)}
+              {medios.map(m=><div key={m.id} className="space-y-2"><label htmlFor={`cierre-medio-${m.id}`} className="block text-sm font-medium">{m.nombre}</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id={`cierre-medio-${m.id}`} className="min-h-11 pl-8 tabular-nums" inputMode="decimal" placeholder="0,00" required disabled={guardando} value={declaraciones[m.id] ?? ""} onChange={e=>setDeclaraciones({...declaraciones,[m.id]:e.target.value})}/></div><DiferenciaSaldoArqueo declarado={declaraciones[m.id] ?? ""} esperado={saldoSistema?.arqueoId === abierto.id && saldoSistema.localId === localId ? saldoSistema.medios.find(medio=>medio.medioPagoId === m.id)?.monto : undefined} /></div>)}
             </div>:<>
               <div className="space-y-2"><label htmlFor="apertura-caja" className="block text-sm font-medium">Caja</label><select id="apertura-caja" required disabled={guardando} className="min-h-11 w-full rounded-md border bg-background px-3 text-base" value={caja} onChange={e=>setCaja(e.target.value)}>{cajas.filter(c=>c.activo).map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
               <div className="space-y-2"><label htmlFor="apertura-monto" className="block text-sm font-medium">Monto inicial</label><div className="relative"><span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span><Input id="apertura-monto" className="min-h-11 pl-8 tabular-nums" required disabled={guardando} inputMode="decimal" placeholder="0,00" aria-describedby="apertura-monto-ayuda" value={inicial} onChange={e=>setInicial(e.target.value)}/></div><p id="apertura-monto-ayuda" className="text-xs text-muted-foreground">Importe disponible al comenzar. Expresado en pesos.</p></div>
