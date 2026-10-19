@@ -39,6 +39,7 @@ type PedidoDetallePanelProps = {
 type ProductoPendienteUI = ProductoPendientePedido & {
   id: string;
   totalInput: string;
+  comentarioVisible?: boolean;
 };
 
 function normalizarBusqueda(value: string) {
@@ -91,6 +92,7 @@ export function PedidoDetallePanel({
     onPendientesChange?.(itemsPendientes.length > 0);
   }, [itemsPendientes.length, onPendientesChange]);
   const [productoResaltadoIndex, setProductoResaltadoIndex] = useState(0);
+  const [errorEliminacion, setErrorEliminacion] = useState<{ pedidoId: string; mensaje: string } | null>(null);
   const [errorPendientes, setErrorPendientes] = useState<string | null>(null);
   const [mostrandoDescuento, setMostrandoDescuento] = useState(false);
   const [tipoDescuento, setTipoDescuento] = useState<DescuentoPedidoInput["tipo"]>("monto");
@@ -115,6 +117,7 @@ export function PedidoDetallePanel({
 
   useEffect(() => {
     setBusqueda("");
+    setErrorEliminacion(null);
     setConfirmando(false);
     setItemActualizandoId(null);
     setMostrandoCierre(false);
@@ -277,7 +280,13 @@ export function PedidoDetallePanel({
 
     try {
       setItemActualizandoId(item.id);
+      setErrorEliminacion(null);
       await onEliminarItem(item.id);
+    } catch (err) {
+      if (pedido) setErrorEliminacion({
+        pedidoId: pedido.id,
+        mensaje: err instanceof Error ? err.message : "No se pudo eliminar el producto.",
+      });
     } finally {
       setItemActualizandoId(null);
     }
@@ -289,7 +298,13 @@ export function PedidoDetallePanel({
 
     try {
       setItemActualizandoId(itemDescuento.id);
+      setErrorEliminacion(null);
       await onEliminarItem(itemDescuento.id);
+    } catch (err) {
+      if (pedido) setErrorEliminacion({
+        pedidoId: pedido.id,
+        mensaje: err instanceof Error ? err.message : "No se pudo eliminar el producto.",
+      });
     } finally {
       setItemActualizandoId(null);
     }
@@ -331,6 +346,15 @@ export function PedidoDetallePanel({
         <h2 className="text-lg font-bold">{titulo}</h2>
         {menu}
       </div>
+
+      {pedido && errorEliminacion?.pedidoId === pedido.id && (
+        <div role="alert" className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <span>{errorEliminacion.mensaje}</span>
+          <button type="button" aria-label="Cerrar mensaje" className="shrink-0 rounded p-1 hover:bg-destructive/10" onClick={() => setErrorEliminacion(null)}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {pedido ? (
         <>
@@ -533,7 +557,7 @@ export function PedidoDetallePanel({
                 <div className="space-y-2 text-sm">
                   {itemsPendientes.map((item) => (
                     <div key={item.id} className="rounded-md border bg-card p-2">
-                      <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2">
                         <div className="flex items-center overflow-hidden rounded-md border">
                           <Button
                             className="h-9 rounded-none border-0"
@@ -582,6 +606,19 @@ export function PedidoDetallePanel({
                         </div>
                         <Button
                           size="icon"
+                          type="button"
+                          variant="ghost"
+                          className="shrink-0"
+                          title={item.comentarioVisible ? "Ocultar comentario" : "Agregar comentario"}
+                          aria-label={item.comentarioVisible ? "Ocultar comentario" : "Agregar comentario"}
+                          aria-expanded={Boolean(item.comentarioVisible)}
+                          aria-controls={`comentario-${item.id}`}
+                          onClick={() => actualizarPendiente(item.id, { comentarioVisible: !item.comentarioVisible })}
+                        >
+                          <MessageSquare className={`h-4 w-4 ${item.comentario?.trim() ? "text-primary" : "text-muted-foreground"}`} />
+                        </Button>
+                        <Button
+                          size="icon"
                           title="Quitar de pendientes"
                           type="button"
                           variant="ghost"
@@ -594,16 +631,20 @@ export function PedidoDetallePanel({
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <Input
-                          placeholder="Agrega un comentario aqui..."
-                          value={item.comentario ?? ""}
-                          onChange={(event) =>
-                            actualizarPendiente(item.id, { comentario: event.target.value })
-                          }
-                        />
-                      </div>
+                      {item.comentarioVisible && (
+                        <div className="mt-2">
+                          <Input
+                            id={`comentario-${item.id}`}
+                            autoFocus
+                            aria-label={`Comentario para ${item.nombreProducto}`}
+                            placeholder="Agrega un comentario aqui..."
+                            value={item.comentario ?? ""}
+                            onChange={(event) =>
+                              actualizarPendiente(item.id, { comentario: event.target.value })
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

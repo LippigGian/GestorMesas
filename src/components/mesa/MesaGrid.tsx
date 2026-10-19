@@ -658,8 +658,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
       if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
-      if (sigueVigente()) setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
-      throw err;
+      if (sigueVigente()) throw err;
     }
   };
   const aplicarDescuento = async (descuento: DescuentoPedidoInput) => {

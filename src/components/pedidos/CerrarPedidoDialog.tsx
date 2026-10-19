@@ -11,10 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import type { MedioPago, PedidoItem } from "@/lib/types";
 import { useLocal } from "@/context/LocalContext";
-import { obtenerMediosPago } from "@/services/mediosPagoService";
+import { obtenerTodosMediosPago } from "@/services/mediosPagoService";
 import {
   obtenerCantidadesCobradasItems,
-  obtenerTotalPagadoPedido,
+  obtenerPagosPedido,
   type ItemCobroParcialInput,
   type PagoPedidoInput,
 } from "@/services/pedidosService";
@@ -77,6 +77,7 @@ export function CerrarPedidoDialog({
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [pagos, setPagos] = useState<PagoForm[]>([]);
   const [totalPagadoPrevio, setTotalPagadoPrevio] = useState(0);
+  const [pagosPreviosPorMedio, setPagosPreviosPorMedio] = useState<{ id: string; nombre: string; monto: number }[]>([]);
   const [cobroParcial, setCobroParcial] = useState(false);
   const [itemsCobroParcial, setItemsCobroParcial] = useState<Record<string, number>>({});
   const [cantidadesCobradas, setCantidadesCobradas] = useState<Record<string, number>>({});
@@ -113,7 +114,6 @@ export function CerrarPedidoDialog({
   const totalCobradoAcumulado = totalPagadoPrevio + totalPagado;
   const saldoRestanteLuegoDelCobro = Math.max(0, total - totalCobradoAcumulado);
   const faltante = Math.max(0, objetivoCobro - totalPagado);
-  const excedente = Math.max(0, totalPagado - objetivoCobro);
 
   useEffect(() => {
     if (!open) return;
@@ -137,14 +137,28 @@ export function CerrarPedidoDialog({
         setCobroParcial(false);
         setItemsCobroParcial({});
         setCantidadesCobradas({});
-        const medios = await obtenerMediosPago(localIdActual);
-        const [pagado, cantidadesCobradasDb] = await Promise.all([
-          obtenerTotalPagadoPedido(pedidoId),
+        setTotalPagadoPrevio(0);
+        setPagosPreviosPorMedio([]);
+        const [todosLosMedios, pagosPrevios, cantidadesCobradasDb] = await Promise.all([
+          obtenerTodosMediosPago(localIdActual),
+          obtenerPagosPedido(pedidoId),
           obtenerCantidadesCobradasItems(pedidoId),
         ]);
 
         if (!mounted) return;
 
+        const medios = todosLosMedios.filter((medio) => medio.activo);
+        const pagado = pagosPrevios.reduce((suma, pago) => suma + pago.monto, 0);
+        const pagosAgrupados = new Map<string, { id: string; nombre: string; monto: number }>();
+        for (const pago of pagosPrevios) {
+          const anterior = pagosAgrupados.get(pago.medioPagoId);
+          pagosAgrupados.set(pago.medioPagoId, {
+            id: pago.medioPagoId,
+            nombre: todosLosMedios.find((medio) => medio.id === pago.medioPagoId)?.nombre ?? "Medio de pago no disponible",
+            monto: (anterior?.monto ?? 0) + pago.monto,
+          });
+        }
+        setPagosPreviosPorMedio([...pagosAgrupados.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         const pendienteActual = Math.max(0, total - pagado);
         setMediosPago(medios);
         setTotalPagadoPrevio(pagado);
@@ -329,23 +343,125 @@ export function CerrarPedidoDialog({
             <div className="bg-muted px-3 py-2 text-sm font-semibold">Adiciones</div>
             <div className="max-h-72 divide-y overflow-y-auto">
               {items.length > 0 ? (
-                items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-[3rem_1fr_auto] gap-3 px-3 py-2 text-sm"
-                  >
-                    <span>{item.cantidad}</span>
-                    <span>
-                      <span className="block font-medium">{item.nombreProducto}</span>
-                      {item.comentario && (
-                        <span className="block text-xs text-muted-foreground">
-                          {item.comentario}
-                        </span>
-                      )}
-                    </span>
-                    <span>${item.subtotal.toLocaleString()}</span>
-                  </div>
-                ))
+                items.map((item) => {
+                  if (cobroParcial && item.subtotal > 0) {
+                    const cantidadSeleccionada = itemsCobroParcial[item.id] ?? 0;
+                    const cantidadCobrada = cantidadesCobradas[item.id] ?? 0;
+                    const cantidadDisponible = item.cantidad - cantidadCobrada;
+                    const precioUnitario = item.subtotal / item.cantidad;
+                    const seleccionado = cantidadSeleccionada > 0;
+                    const cobradoCompleto = cantidadDisponible <= 0;
+                    const cobradoParcial = cantidadCobrada > 0 && !cobradoCompleto;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`rounded-md border p-2 text-sm transition ${
+                          cobradoCompleto
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-950 opacity-85"
+                            : cobradoParcial
+                              ? "border-amber-200 bg-amber-50"
+                              : seleccionado
+                                ? "border-primary bg-primary/5"
+                                : "bg-background"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="flex min-w-0 flex-1 items-center gap-2">
+                            <input
+                              checked={seleccionado}
+                              className="h-4 w-4"
+                              disabled={confirmando || cobradoCompleto}
+                              type="checkbox"
+                              onChange={(event) =>
+                                cambiarCantidadCobroItem(
+                                  item,
+                                  event.target.checked ? 1 : 0
+                                )
+                              }
+                            />
+                            <span className="min-w-0">
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate font-medium">
+                                  {item.cantidad} × {item.nombreProducto}
+                                </span>
+                                {cobradoCompleto ? (
+                                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    Cobrado
+                                  </span>
+                                ) : cobradoParcial ? (
+                                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                    Parcial
+                                  </span>
+                                ) : null}
+                              </span>
+                              {item.comentario && (
+                                <span className="block text-xs text-muted-foreground">{item.comentario}</span>
+                              )}
+                              <span className="text-xs text-muted-foreground">
+                                ${precioUnitario.toLocaleString()} c/u
+                                {cantidadCobrada > 0
+                                  ? ` - ${cantidadCobrada} de ${item.cantidad} ya cobrada`
+                                  : ""}
+                              </span>
+                            </span>
+                          </label>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-xs font-medium">${item.subtotal.toLocaleString()}</span>
+                            <div className="flex items-center gap-1">
+                            <Button
+                              disabled={confirmando || cobradoCompleto || cantidadSeleccionada <= 0}
+                              size="icon"
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                cambiarCantidadCobroItem(item, cantidadSeleccionada - 1)
+                              }
+                            >
+                              -
+                            </Button>
+                            <span className="grid h-9 min-w-9 place-items-center rounded-md border px-2 font-semibold">
+                              {cantidadSeleccionada}
+                            </span>
+                            <Button
+                              disabled={
+                                confirmando ||
+                                cobradoCompleto ||
+                                cantidadSeleccionada >= cantidadDisponible
+                              }
+                              size="icon"
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                cambiarCantidadCobroItem(item, cantidadSeleccionada + 1)
+                              }
+                            >
+                              +
+                            </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-[3rem_1fr_auto] gap-3 px-3 py-2 text-sm"
+                    >
+                      <span>{item.cantidad}</span>
+                      <span>
+                        <span className="block font-medium">{item.nombreProducto}</span>
+                        {item.comentario && (
+                          <span className="block text-xs text-muted-foreground">
+                            {item.comentario}
+                          </span>
+                        )}
+                      </span>
+                      <span>${item.subtotal.toLocaleString()}</span>
+                    </div>
+                  );
+                })
               ) : (
                 <p className="p-3 text-sm text-muted-foreground">No hay productos cargados.</p>
               )}
@@ -355,118 +471,25 @@ export function CerrarPedidoDialog({
               <span className="text-lg font-bold">${total.toLocaleString()}</span>
             </div>
             {totalPagadoPrevio > 0 && (
-              <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-2 text-sm">
-                <span>Pagado anteriormente</span>
-                <span className="font-semibold">${totalPagadoPrevio.toLocaleString()}</span>
+              <div className="space-y-2 border-t bg-muted/20 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Pagado anteriormente</span>
+                  <span className="font-semibold">${totalPagadoPrevio.toLocaleString()}</span>
+                </div>
+                <ul className="space-y-1 text-xs text-muted-foreground" aria-label="Pagos anteriores por medio de pago">
+                  {pagosPreviosPorMedio.map((pago) => (
+                    <li key={pago.id} className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words">{pago.nombre}</span>
+                      <span className="shrink-0 tabular-nums">${pago.monto.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {cobroParcial && (
-              <div className="border-t p-3">
-                <p className="mb-2 text-sm font-semibold">Seleccionar productos a cobrar</p>
-                <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                  {itemsPositivos.length > 0 ? (
-                    itemsPositivos.map((item) => {
-                      const cantidadSeleccionada = itemsCobroParcial[item.id] ?? 0;
-                      const cantidadCobrada = cantidadesCobradas[item.id] ?? 0;
-                      const cantidadDisponible = item.cantidad - cantidadCobrada;
-                      const precioUnitario = item.subtotal / item.cantidad;
-                      const seleccionado = cantidadSeleccionada > 0;
-                      const cobradoCompleto = cantidadDisponible <= 0;
-                      const cobradoParcial = cantidadCobrada > 0 && !cobradoCompleto;
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={`rounded-md border p-2 text-sm transition ${
-                            cobradoCompleto
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-950 opacity-85"
-                              : cobradoParcial
-                                ? "border-amber-200 bg-amber-50"
-                                : seleccionado
-                                  ? "border-primary bg-primary/5"
-                                  : "bg-background"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <label className="flex min-w-0 flex-1 items-center gap-2">
-                              <input
-                                checked={seleccionado}
-                                className="h-4 w-4"
-                                disabled={confirmando || cobradoCompleto}
-                                type="checkbox"
-                                onChange={(event) =>
-                                  cambiarCantidadCobroItem(
-                                    item,
-                                    event.target.checked ? 1 : 0
-                                  )
-                                }
-                              />
-                              <span className="min-w-0">
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span className="truncate font-medium">
-                                    {item.nombreProducto}
-                                  </span>
-                                  {cobradoCompleto ? (
-                                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                      Cobrado
-                                    </span>
-                                  ) : cobradoParcial ? (
-                                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                                      Parcial
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  ${precioUnitario.toLocaleString()} c/u
-                                  {cantidadCobrada > 0
-                                    ? ` - ${cantidadCobrada} de ${item.cantidad} ya cobrada`
-                                    : ""}
-                                </span>
-                              </span>
-                            </label>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <Button
-                                disabled={confirmando || cobradoCompleto || cantidadSeleccionada <= 0}
-                                size="icon"
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                  cambiarCantidadCobroItem(item, cantidadSeleccionada - 1)
-                                }
-                              >
-                                -
-                              </Button>
-                              <span className="grid h-9 min-w-9 place-items-center rounded-md border px-2 font-semibold">
-                                {cantidadSeleccionada}
-                              </span>
-                              <Button
-                                disabled={
-                                  confirmando ||
-                                  cobradoCompleto ||
-                                  cantidadSeleccionada >= cantidadDisponible
-                                }
-                                size="icon"
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                  cambiarCantidadCobroItem(item, cantidadSeleccionada + 1)
-                                }
-                              >
-                                +
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No hay productos cobrables.</p>
-                  )}
-                </div>
-                <div className="mt-3 flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm">
-                  <span>Total seleccionado</span>
-                  <span className="font-bold">${totalItemsSeleccionados.toLocaleString()}</span>
-                </div>
+              <div className="flex items-center justify-between border-t bg-muted/50 px-3 py-2 text-sm">
+                <span>Total seleccionado</span>
+                <span className="font-bold">${totalItemsSeleccionados.toLocaleString()}</span>
               </div>
             )}
           </section>
@@ -530,12 +553,6 @@ export function CerrarPedidoDialog({
               ))}
 
               <div className="rounded-md bg-muted/50 p-3 text-sm">
-                {cobroParcial && (
-                  <div className="flex justify-between">
-                    <span>Productos seleccionados</span>
-                    <span className="font-semibold">${objetivoCobro.toLocaleString()}</span>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <span>Saldo pendiente total</span>
                   <span className="font-semibold">${pendiente.toLocaleString()}</span>
@@ -551,7 +568,7 @@ export function CerrarPedidoDialog({
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>Total cobrado</span>
+                  <span>{totalPagadoPrevio > 0 ? "Total acumulado al confirmar" : "Total a cobrar"}</span>
                   <span className="font-semibold">${totalCobradoAcumulado.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
@@ -564,10 +581,6 @@ export function CerrarPedidoDialog({
                     <span>${saldoRestanteLuegoDelCobro.toLocaleString()}</span>
                   </div>
                 )}
-                <div className="mt-2 flex justify-between">
-                  <span>Excedente</span>
-                  <span className="font-semibold">${excedente.toLocaleString()}</span>
-                </div>
               </div>
             </div>
           </section>

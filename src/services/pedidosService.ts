@@ -463,7 +463,7 @@ export type PagoPedido = PagoPedidoInput & {
   id: string;
 };
 
-async function obtenerPagosPedidoRaw(pedidoId: string): Promise<PagoPedido[]> {
+export async function obtenerPagosPedido(pedidoId: string): Promise<PagoPedido[]> {
   const { data, error } = await supabase
     .from("pedido_pagos")
     .select("id, medio_pago_id, monto")
@@ -481,7 +481,7 @@ async function obtenerPagosPedidoRaw(pedidoId: string): Promise<PagoPedido[]> {
 }
 
 export async function obtenerTotalPagadoPedido(pedidoId: string): Promise<number> {
-  const pagos = await obtenerPagosPedidoRaw(pedidoId);
+  const pagos = await obtenerPagosPedido(pedidoId);
   return pagos.reduce((acc, pago) => acc + pago.monto, 0);
 }
 
