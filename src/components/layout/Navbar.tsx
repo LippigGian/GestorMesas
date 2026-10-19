@@ -97,6 +97,10 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
     return true;
   });
   const salonEditando = salones.find((salon) => salon.id === salonEditandoId);
+  const seccionActual = location.pathname === "/configuracion" && puedeConfigurar
+    ? { label: "Configuración", icon: Settings }
+    : navigationVisible.find(({ to }) => to === location.pathname);
+  const IconoSeccion = seccionActual?.icon;
 
   const limpiarFormularioSalon = () => {
     setNombreSalon("");
@@ -352,6 +356,14 @@ export function Navbar({ modoEdicion, setModoEdicion }: NavbarProps) {
               )}
             </div>
           )}
+        </div>
+      )}
+      {location.pathname !== "/" && location.pathname !== "/ventas" && seccionActual && IconoSeccion && (
+        <div className="navbar-context">
+          <div className="navbar-section-label flex min-h-[34px] items-center gap-2 text-sm font-semibold">
+            <IconoSeccion className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{seccionActual.label}</span>
+          </div>
         </div>
       )}
     </header>

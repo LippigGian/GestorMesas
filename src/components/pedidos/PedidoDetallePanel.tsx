@@ -20,6 +20,7 @@ type PedidoDetallePanelProps = {
   tituloCierre: string;
   textoBotonCerrar: string;
   menu?: ReactNode;
+  onEdicionChange?: (editando: boolean) => void;
   onPendientesChange?: (hayPendientes: boolean) => void;
   infoSlot?: ReactNode;
   emptyTitle: string;
@@ -71,6 +72,7 @@ export function PedidoDetallePanel({
   textoBotonCerrar,
   menu,
   onPendientesChange,
+  onEdicionChange,
   infoSlot,
   emptyTitle,
   emptyDescription,
@@ -100,6 +102,9 @@ export function PedidoDetallePanel({
   const [aplicandoDescuento, setAplicandoDescuento] = useState(false);
   const [errorDescuento, setErrorDescuento] = useState<string | null>(null);
   const { cargando, error, productosActivos } = useCatalogo();
+  const edicionActiva = busqueda.trim().length > 0 || itemsPendientes.length > 0 || confirmando || itemActualizandoId !== null || aplicandoDescuento || mostrandoCierre || mostrandoDescuento;
+  useEffect(() => { onEdicionChange?.(edicionActiva); }, [edicionActiva, onEdicionChange]);
+  useEffect(() => () => { onEdicionChange?.(false); }, [onEdicionChange]);
   const busquedaNormalizada = normalizarBusqueda(busqueda);
   const productosDisponibles = useMemo(
     () =>

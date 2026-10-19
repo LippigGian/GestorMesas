@@ -14,6 +14,7 @@ import type {
 
 type Props = {
   mesa: Mesa | null;
+  onEdicionChange?: (editando: boolean) => void;
   mesasDisponibles?: Mesa[];
   pedido: Pedido | null;
   pedidoItems: PedidoItem[];
@@ -34,6 +35,7 @@ type Props = {
 
 export function MesaDetalleDialog({
   mesa,
+  onEdicionChange,
   mesasDisponibles = [],
   pedido,
   pedidoItems,
@@ -59,6 +61,10 @@ export function MesaDetalleDialog({
   const [moviendoMesa, setMoviendoMesa] = useState(false);
   const [mesaDestinoId, setMesaDestinoId] = useState("");
   const [errorMesa, setErrorMesa] = useState<string | null>(null);
+  const [editandoPedido, setEditandoPedido] = useState(false);
+  const edicionActiva = editandoPedido || editandoMesa || moviendoMesa || confirmandoOcupacion || mostrandoCancelar;
+  useEffect(() => { onEdicionChange?.(edicionActiva); }, [edicionActiva, onEdicionChange]);
+  useEffect(() => () => { onEdicionChange?.(false); }, [onEdicionChange]);
 
   useEffect(() => {
     setCantidadPersonas("");
@@ -156,6 +162,7 @@ export function MesaDetalleDialog({
     return (
       <>
       <PedidoDetallePanel
+        onEdicionChange={setEditandoPedido}
         pedido={pedido}
         pedidoItems={pedidoItems}
         titulo={mesa ? `Mesa ${mesa.numero}` : "Mesa"}

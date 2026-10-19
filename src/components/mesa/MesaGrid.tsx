@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useSincronizacionPedidos } from "@/hooks/useSincronizacionPedidos";
+import { EstadoSincronizacion } from "@/components/pedidos/EstadoSincronizacion";
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { crearControlSeleccion } from '@/lib/controlSeleccion';
 import { MesaCard } from './MesaCard';
 import { MesaDialog } from './MesaDialog';
@@ -169,62 +171,54 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     );
   }, [cantidadFilas, cantidadColumnas, sectoresActivos.join('|')]);
 
+  const [editandoDetalle, setEditandoDetalle] = useState(false);
+  const edicionRef = useRef({ detalle: editandoDetalle, plano: modoEdicion });
+  useLayoutEffect(() => { edicionRef.current = { detalle: editandoDetalle, plano: modoEdicion }; });
+  const sincronizacion = useSincronizacionPedidos(cargandoLocal ? undefined : localId ?? undefined, async (vigente) => {
+    if (modoEdicion && !cargandoMesas) return;
+    const sigueSeleccion = controlSeleccion.current.capturar();
+    const seleccion = mesaSeleccionada;
+    const mesas = await obtenerMesas(localId!);
+    let pedido: Pedido | null = null;
+    let items: PedidoItem[] = [];
+    const mesaActualizada = mesas.find((mesa) => mesa.id === seleccion?.id);
+    if (seleccion && !editandoDetalle && mesaActualizada?.estado === 'ocupada') {
+      pedido = await obtenerPedidoAbiertoPorMesa(seleccion.id);
+      items = pedido ? await obtenerItemsPedido(pedido.id) : [];
+    }
+    if (!vigente() || (edicionRef.current.plano && !cargandoMesas)) return;
+    const filas = Math.max(cantidadFilas, 1, ...mesas.map((mesa) => mesa.y + 1));
+    const columnas = Math.max(cantidadColumnas, 1, ...mesas.map((mesa) => mesa.x + 1));
+    setCantidadFilas(filas);
+    setCantidadColumnas(columnas);
+    setCeldasPorSector(sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
+      acc[sector] = ubicarMesasEnCeldas(generarCeldas(filas, columnas), mesas, sector);
+      return acc;
+    }, {}));
+    if (seleccion && sigueSeleccion() && !editandoDetalle && !edicionRef.current.detalle) {
+      setMesaSeleccionada(mesaActualizada ?? null);
+      setPedidoActivo(pedido);
+      setPedidoItems(items);
+    }
+    setCargandoMesas(false);
+  });
+  const { ejecutarCambio, actualizar: actualizarSincronizacion } = sincronizacion;
   useEffect(() => {
-    if (cargandoLocal) return;
-
-    if (!localId) {
-      setCargandoMesas(false);
-      setErrorMesas(errorLocal ?? 'No hay un local activo configurado.');
-      return;
-    }
-
-    const localIdActual = localId;
-    let mounted = true;
-
-    async function cargarMesas() {
-      try {
-        setCargandoMesas(true);
-        setErrorMesas(null);
-        const mesas = await obtenerMesas(localIdActual);
-
-        if (!mounted) {
-          return;
-        }
-
-        const filasNecesarias = Math.max(1, ...mesas.map((mesa) => mesa.y + 1));
-        const columnasNecesarias = Math.max(1, ...mesas.map((mesa) => mesa.x + 1));
-        const filasObjetivo = Math.max(cantidadFilas, filasNecesarias);
-        const columnasObjetivo = Math.max(cantidadColumnas, columnasNecesarias);
-        const celdasBase = sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
-          acc[sector] = generarCeldas(filasObjetivo, columnasObjetivo);
-          return acc;
-        }, {});
-
-        setCantidadFilas(filasObjetivo);
-        setCantidadColumnas(columnasObjetivo);
-        setCeldasPorSector(
-          sectoresActivos.reduce<Record<string, Celda[]>>((acc, sector) => {
-            acc[sector] = ubicarMesasEnCeldas(celdasBase[sector], mesas, sector);
-            return acc;
-          }, {})
-        );
-      } catch (err) {
-        if (mounted) {
-          setErrorMesas(err instanceof Error ? err.message : 'No se pudieron cargar las mesas');
-        }
-      } finally {
-        if (mounted) {
-          setCargandoMesas(false);
-        }
-      }
-    }
-
-    cargarMesas();
-
-    return () => {
-      mounted = false;
-    };
-  }, [cargandoLocal, errorLocal, localId, sectoresActivos.join('|')]);
+    controlSeleccion.current.cambiar();
+    mesaVisibleId.current = null;
+    setMesaSeleccionadaState(null);
+    setPedidoActivo(null);
+    setPedidoItems([]);
+    setCeldasPorSector({});
+  }, [localId]);
+  useEffect(() => { if (sincronizacion.error) setCargandoMesas(false); }, [sincronizacion.error]);
+  useEffect(() => {
+    setCargandoMesas(Boolean(localId));
+    if (!localId && !cargandoLocal) setErrorMesas(errorLocal ?? 'No hay un local activo configurado.');
+  }, [localId, cargandoLocal, errorLocal]);
+  useEffect(() => {
+    if (!editandoDetalle && !modoEdicion) actualizarSincronizacion();
+  }, [editandoDetalle, modoEdicion, actualizarSincronizacion]);
 
   const actualizarCeldas = (nuevas: Celda[]) => {
     setCeldasPorSector((prev) => ({
@@ -302,7 +296,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         throw new Error('No hay celdas libres en el salon destino.');
       }
 
-      const mesaGuardada = await guardarMesa({
+      const mesaGuardada = await ejecutarCambio(() => guardarMesa({
         id: celdaActual.mesa?.id ?? uuidv4(),
         localId,
         numero: numeroMesa.trim(),
@@ -313,7 +307,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         sector: sectorDestino,
         x: celdaDestino.x,
         y: celdaDestino.y,
-      });
+      }));
 
       setCeldasPorSector((prev) =>
         Object.fromEntries(
@@ -394,7 +388,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      await eliminarMesa(mesa.id);
+      await ejecutarCambio(() => eliminarMesa(mesa.id));
       actualizarCeldas(celdas.map((celda, i) => (i === index ? { ...celda, mesa: undefined } : celda)));
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo eliminar la mesa');
@@ -417,7 +411,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     updated[to].mesa = mesaOrigen;
 
     actualizarCeldas(updated);
-    await actualizarPosicionMesa(mesaOrigen.id, sectorActual, updated[to].x, updated[to].y);
+    await ejecutarCambio(() => actualizarPosicionMesa(mesaOrigen.id, sectorActual, updated[to].x, updated[to].y));
   };
 
   const ocuparMesa = async (personas: number) => {
@@ -437,8 +431,8 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
-      const pedido = await crearPedidoMesa(mesaSeleccionada.id, personas, localId);
+      await ejecutarCambio(() => actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas));
+      const pedido = await ejecutarCambio(() => crearPedidoMesa(mesaSeleccionada.id, personas, localId));
       setPedidoActivo(pedido);
       setPedidoItems([]);
       setMesaSeleccionada(mesaOcupada);
@@ -460,9 +454,9 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      await actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas);
+      await ejecutarCambio(() => actualizarEstadoMesa(mesaSeleccionada.id, 'ocupada', personas));
       if (pedidoActivo) {
-        const pedidoActualizado = await actualizarPersonasPedido(pedidoActivo.id, personas);
+        const pedidoActualizado = await ejecutarCambio(() => actualizarPersonasPedido(pedidoActivo.id, personas));
         setPedidoActivo(pedidoActualizado);
       }
       setMesaSeleccionada(mesaActualizada);
@@ -503,11 +497,11 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         }
 
         const personasDestino = (mesaDestino.personas ?? 0) + (mesaSeleccionada.personas ?? 0);
-        const pedidoActualizado = await juntarPedidosMesa(pedidoActivo.id, pedidoDestino.id);
+        const pedidoActualizado = await ejecutarCambio(() => juntarPedidosMesa(pedidoActivo.id, pedidoDestino.id));
 
-        await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
-        await actualizarEstadoMesa(mesaDestino.id, 'ocupada', personasDestino);
-        await actualizarPersonasPedido(pedidoDestino.id, personasDestino);
+        await ejecutarCambio(() => actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0));
+        await ejecutarCambio(() => actualizarEstadoMesa(mesaDestino.id, 'ocupada', personasDestino));
+        await ejecutarCambio(() => actualizarPersonasPedido(pedidoDestino.id, personasDestino));
         const mesaDestinoActualizada: Mesa = {
           ...mesaDestino,
           estado: 'ocupada',
@@ -522,9 +516,9 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         return;
       }
 
-      const pedidoActualizado = await moverPedidoAMesa(pedidoActivo.id, mesaDestino.id);
-      await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
-      await actualizarEstadoMesa(mesaDestino.id, 'ocupada', mesaSeleccionada.personas ?? 0);
+      const pedidoActualizado = await ejecutarCambio(() => moverPedidoAMesa(pedidoActivo.id, mesaDestino.id));
+      await ejecutarCambio(() => actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0));
+      await ejecutarCambio(() => actualizarEstadoMesa(mesaDestino.id, 'ocupada', mesaSeleccionada.personas ?? 0));
 
       const mesaDestinoActualizada: Mesa = {
         ...mesaDestino,
@@ -544,7 +538,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
   const cancelarPedidoMesa = async () => {
     if (!mesaSeleccionada || !pedidoActivo) throw new Error('No hay un pedido activo para cancelar.');
-    await cancelarPedido(pedidoActivo.id);
+    await ejecutarCambio(() => cancelarPedido(pedidoActivo.id));
     actualizarMesaEnSectores({ ...mesaSeleccionada, estado: 'libre', personas: 0, productos: [] });
     setMesaSeleccionada(null);
     setPedidoActivo(null);
@@ -562,9 +556,9 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     try {
       setErrorMesas(null);
       if (pedidoActivo) {
-        await cerrarPedido(pedidoActivo.id, pagos, localId);
+        await ejecutarCambio(() => cerrarPedido(pedidoActivo.id, pagos, localId));
       }
-      await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
+      await ejecutarCambio(() => actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0));
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo cerrar la mesa');
       return;
@@ -593,7 +587,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      await registrarPagoParcialPedido(pedidoActivo.id, pagos, localId, itemsCobrados);
+      await ejecutarCambio(() => registrarPagoParcialPedido(pedidoActivo.id, pagos, localId, itemsCobrados));
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;
@@ -606,7 +600,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      const items = await confirmarProductosPedido(pedidoActivo.id, productos);
+      const items = await ejecutarCambio(() => confirmarProductosPedido(pedidoActivo.id, productos));
       if (!sigueVigente()) return;
       setPedidoItems(items);
       setPedidoActivo((prev) =>
@@ -640,7 +634,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      const items = await actualizarCantidadItemPedido(pedidoActivo.id, item, cantidad);
+      const items = await ejecutarCambio(() => actualizarCantidadItemPedido(pedidoActivo.id, item, cantidad));
       if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
@@ -654,7 +648,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      const items = await eliminarItemPedido(pedidoActivo.id, itemId);
+      const items = await ejecutarCambio(() => eliminarItemPedido(pedidoActivo.id, itemId));
       if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
@@ -667,7 +661,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
     try {
       setErrorMesas(null);
-      const items = await aplicarDescuentoPedido(pedidoActivo.id, descuento);
+      const items = await ejecutarCambio(() => aplicarDescuentoPedido(pedidoActivo.id, descuento));
       if (!sigueVigente()) return;
       actualizarTotalPedidoActivo(items);
     } catch (err) {
@@ -687,6 +681,8 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       <section className="mesas-spa-floor min-w-0 flex-1 overflow-x-auto rounded-lg border bg-card p-4 shadow-sm">
+        <EstadoSincronizacion {...sincronizacion} />
+        {editandoDetalle && <p className="mb-3 text-xs text-muted-foreground">El detalle se sincronizará al terminar la edición.</p>}
         {errorMesas && (
           <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {errorMesas}
@@ -833,6 +829,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
 
       <MesaDetalleDialog
         key={mesaActual?.id ?? 'sin-mesa'}
+        onEdicionChange={setEditandoDetalle}
         mesa={mesaActual}
         mesasDisponibles={mesasDisponibles}
         pedido={pedidoActivo}

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useSincronizacionPedidos } from "@/hooks/useSincronizacionPedidos";
+import { EstadoSincronizacion } from "@/components/pedidos/EstadoSincronizacion";
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,47 +91,42 @@ export function Mostrador() {
   }, [menuPedidoAbierto]);
   const [errorMostrador, setErrorMostrador] = useState<string | null>(null);
 
+  const [editandoDetalle, setEditandoDetalle] = useState(false);
+  const detalleEnEdicion = editandoDetalle || guardando || mostrandoMover || mostrandoCancelar || cliente !== (pedidoSeleccionado?.cliente ?? '');
+  const edicionRef = useRef(detalleEnEdicion);
+  useLayoutEffect(() => { edicionRef.current = detalleEnEdicion; });
+  const sincronizacion = useSincronizacionPedidos(cargandoLocal ? undefined : localId ?? undefined, async (vigente) => {
+    const sigueSeleccion = controlSeleccion.current.capturar();
+    const seleccion = pedidoSeleccionado;
+    const abiertos = await obtenerPedidosMostradorAbiertos(localId!);
+    const actualizado = abiertos.find((pedido) => pedido.id === seleccion?.id);
+    const items = actualizado && !detalleEnEdicion ? await obtenerItemsPedido(actualizado.id) : [];
+    if (!vigente()) return;
+    setPedidos(abiertos);
+    if (seleccion && sigueSeleccion() && !detalleEnEdicion && !edicionRef.current) {
+      setPedidoSeleccionado(actualizado ?? null);
+      setPedidoItems(items);
+      setCliente(actualizado?.cliente ?? '');
+    }
+    setCargandoPedidos(false);
+  });
+  const { ejecutarCambio, actualizar: actualizarSincronizacion } = sincronizacion;
   useEffect(() => {
-    if (cargandoLocal) return;
-
-    if (!localId) {
-      setPedidos([]);
-      setCargandoPedidos(false);
-      setErrorMostrador(errorLocal ?? 'No hay un local activo configurado.');
-      return;
-    }
-
-    const localIdActual = localId;
-    let mounted = true;
-
-    async function cargarPedidos() {
-      try {
-        setCargandoPedidos(true);
-        setErrorMostrador(null);
-        const abiertos = await obtenerPedidosMostradorAbiertos(localIdActual);
-
-        if (!mounted) return;
-
-        setPedidos(abiertos);
-      } catch (err) {
-        if (mounted) {
-          setErrorMostrador(
-            err instanceof Error ? err.message : 'No se pudieron cargar los pedidos'
-          );
-        }
-      } finally {
-        if (mounted) {
-          setCargandoPedidos(false);
-        }
-      }
-    }
-
-    cargarPedidos();
-
-    return () => {
-      mounted = false;
-    };
-  }, [cargandoLocal, errorLocal, localId]);
+    controlSeleccion.current.cambiar();
+    pedidoVisibleId.current = null;
+    setPedidoSeleccionadoState(null);
+    setPedidoItems([]);
+    setPedidos([]);
+    setCliente('');
+  }, [localId]);
+  useEffect(() => { if (sincronizacion.error) setCargandoPedidos(false); }, [sincronizacion.error]);
+  useEffect(() => {
+    setCargandoPedidos(Boolean(localId));
+    if (!localId && !cargandoLocal) setErrorMostrador(errorLocal ?? 'No hay un local activo configurado.');
+  }, [localId, cargandoLocal, errorLocal]);
+  useEffect(() => {
+    if (!detalleEnEdicion) actualizarSincronizacion();
+  }, [detalleEnEdicion, actualizarSincronizacion]);
 
   const actualizarPedidoSeleccionado = (pedido: Pedido, sigueVigente: () => boolean) => {
     setPedidos((prev) => prev.map((item) => (item.id === pedido.id ? pedido : item)));
@@ -145,7 +142,7 @@ export function Mostrador() {
     const sigueVigente = controlSeleccion.current.capturar();
     setGuardando(true);
     try {
-      await moverPedidoMostradorAMesa(pedidoId, mesaId, personas);
+      await ejecutarCambio(() => moverPedidoMostradorAMesa(pedidoId, mesaId, personas));
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoId));
       if (!sigueVigente()) return;
       setPedidoSeleccionado(null);
@@ -162,7 +159,7 @@ export function Mostrador() {
     const sigueVigente = controlSeleccion.current.capturar();
     setGuardando(true);
     try {
-      await cancelarPedido(id);
+      await ejecutarCambio(() => cancelarPedido(id));
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== id));
       if (!sigueVigente()) return;
       setPedidoSeleccionado(null);
@@ -210,7 +207,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      const pedido = await crearPedidoMostrador(localId);
+      const pedido = await ejecutarCambio(() => crearPedidoMostrador(localId));
       setPedidos((prev) => [pedido, ...prev]);
       if (!sigueVigente()) return;
       setPedidoSeleccionado(pedido);
@@ -231,7 +228,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      actualizarPedidoSeleccionado(await actualizarClientePedido(pedidoSeleccionado.id, cliente), sigueVigente);
+      actualizarPedidoSeleccionado(await ejecutarCambio(() => actualizarClientePedido(pedidoSeleccionado.id, cliente)), sigueVigente);
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo guardar el cliente');
     } finally {
@@ -246,7 +243,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      const items = await confirmarProductosPedido(pedidoSeleccionado.id, productos);
+      const items = await ejecutarCambio(() => confirmarProductosPedido(pedidoSeleccionado.id, productos));
       actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
@@ -262,7 +259,7 @@ export function Mostrador() {
     const sigueVigente = controlSeleccion.current.capturar();
     try {
       setErrorMostrador(null);
-      const items = await actualizarCantidadItemPedido(pedidoSeleccionado.id, item, cantidad);
+      const items = await ejecutarCambio(() => actualizarCantidadItemPedido(pedidoSeleccionado.id, item, cantidad));
       actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo actualizar el producto');
@@ -276,7 +273,7 @@ export function Mostrador() {
     const sigueVigente = controlSeleccion.current.capturar();
     try {
       setErrorMostrador(null);
-      const items = await eliminarItemPedido(pedidoSeleccionado.id, itemId);
+      const items = await ejecutarCambio(() => eliminarItemPedido(pedidoSeleccionado.id, itemId));
       actualizarTotalPedidoActivo(pedidoSeleccionado.id, items, sigueVigente);
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo eliminar el producto');
@@ -298,7 +295,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await cerrarPedido(pedidoSeleccionado.id, pagos, localId);
+      await ejecutarCambio(() => cerrarPedido(pedidoSeleccionado.id, pagos, localId));
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
       if (!sigueVigente()) return;
       setPedidoSeleccionado(null);
@@ -328,7 +325,7 @@ export function Mostrador() {
     try {
       setGuardando(true);
       setErrorMostrador(null);
-      await registrarPagoParcialPedido(pedidoSeleccionado.id, pagos, localId, itemsCobrados);
+      await ejecutarCambio(() => registrarPagoParcialPedido(pedidoSeleccionado.id, pagos, localId, itemsCobrados));
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo registrar el cobro parcial');
       throw err;
@@ -339,6 +336,8 @@ export function Mostrador() {
 
   return (
     <main className="p-4">
+      <EstadoSincronizacion {...sincronizacion} />
+      {detalleEnEdicion && <p className="mb-3 text-xs text-muted-foreground">El detalle se sincronizará al terminar la edición.</p>}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-bold text-foreground">Mostrador</h2>
         <Button disabled={guardando} onClick={crearNuevoPedido}>
@@ -392,6 +391,7 @@ export function Mostrador() {
         <PedidoDetallePanel
           key={pedidoSeleccionado?.id ?? 'sin-pedido'}
           onPendientesChange={setHayPendientes}
+          onEdicionChange={setEditandoDetalle}
           pedido={pedidoSeleccionado}
           pedidoItems={pedidoItems}
           titulo={pedidoSeleccionado ? crearTituloPedido(pedidoSeleccionado) : 'Mostrador'}
