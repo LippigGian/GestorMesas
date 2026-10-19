@@ -15,6 +15,7 @@ const item = '60000000-0000-4000-8000-000000000001';
     await db.exec(fs.readFileSync('docs/sql/02_aislamiento_cafeterias.sql', 'utf8'));
     await db.exec(fs.readFileSync('docs/sql/05_permisos_empleados.sql', 'utf8'));
     await db.exec(fs.readFileSync('docs/sql/09_historial_arqueos_por_permiso.sql', 'utf8'));
+    await db.exec(fs.readFileSync('docs/sql/10_rectificar_arqueos_cerrados.sql', 'utf8'));
     const ts = require('typescript');
     const catalogo = {};
     new Function('exports',ts.transpileModule(fs.readFileSync('src/lib/permisos.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(catalogo);

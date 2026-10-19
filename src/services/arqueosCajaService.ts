@@ -77,7 +77,14 @@ export async function obtenerArqueosCaja(localId?: string): Promise<ArqueoCaja[]
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row) => mapArqueo(row as ArqueoCajaRow));
+  const arqueos = (data ?? []).map((row) => mapArqueo(row as ArqueoCajaRow));
+  if (!arqueos.length) return arqueos;
+  const {data:resumen,error:resumenError}=await supabase.rpc("resumen_rectificaciones_arqueos",{p_arqueos_ids:arqueos.map(a=>a.id)});
+  // Mantener disponible el historial si la migración del distintivo aún no se instaló.
+  if (resumenError?.code === "PGRST202") return arqueos;
+  if (resumenError) throw new Error(resumenError.message);
+  const cantidades=new Map<string,number>((resumen ?? []).map((r:{arqueo_id:string;cantidad:number})=>[r.arqueo_id,Number(r.cantidad)]));
+  return arqueos.map(a=>({...a,cantidadRectificaciones:cantidades.get(a.id) ?? 0}));
 }
 
 async function obtenerMontosSistemaPorMedio(arqueoId: string) {
@@ -154,7 +161,7 @@ export async function crearArqueoCaja(input: {
     throw new Error(error.message);
   }
 
-  return mapArqueo(data as ArqueoCajaRow);
+  return {...mapArqueo(data as ArqueoCajaRow),cantidadRectificaciones:0};
 }
 
 export async function cerrarArqueoCaja(input: {
@@ -217,7 +224,7 @@ export async function cerrarArqueoCaja(input: {
     throw new Error(error.message);
   }
 
-  return mapArqueo(data as ArqueoCajaRow);
+  return {...mapArqueo(data as ArqueoCajaRow),cantidadRectificaciones:0};
 }
 
 export async function obtenerDetalleMediosPagoArqueo(

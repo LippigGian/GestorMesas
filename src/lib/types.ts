@@ -98,6 +98,7 @@ export type Caja = {
 };
 
 export type ArqueoCaja = {
+  cantidadRectificaciones?: number;
   id: string;
   localId?: string;
   cajaId: string;

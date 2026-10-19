@@ -1,6 +1,10 @@
+import { DistintivoRectificacion, SelectorRectificaciones } from "@/components/ventas/DistintivoRectificacion";
+import { filtrarPorRectificacion, type FiltroRectificaciones } from "@/lib/filtroRectificaciones";
 import { usePermisos } from "@/context/PermisosContext";
 import { CajaOperativa } from "@/components/ventas/CajaOperativa";
 import { IndicadorEstadoCaja } from "@/components/ventas/IndicadorEstadoCaja";
+import { RectificacionArqueo } from "@/components/ventas/RectificacionArqueo";
+import type { EstadoRectificacion } from "@/lib/rectificacionesArqueo";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Filter, Plus, ReceiptText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -369,6 +373,16 @@ function VentasAdministrador() {
           onAbrirArqueo={abrirArqueo}
           onCerrarArqueo={cerrarArqueo}
           onSelectArqueo={seleccionarArqueo}
+          onRectificado={(resultado)=>{
+            const actualizar=(arqueo:ArqueoCaja)=>arqueo.id === resultado.arqueoId
+              ? {...arqueo,cantidadRectificaciones:resultado.revision,montoFinalDeclarado:resultado.actual.totalDeclarado ?? undefined,diferencia:resultado.actual.diferencia ?? undefined}:arqueo;
+            setArqueos(prev=>prev.map(actualizar));
+            setArqueoSeleccionado(prev=>prev?actualizar(prev):prev);
+            if(arqueoSeleccionado?.id === resultado.arqueoId)setDetalleMediosSeleccionado(resultado.actual.medios.map(m=>({
+              arqueoCajaId:resultado.arqueoId,medioPagoId:m.medioPagoId,medioPagoNombre:m.nombre,
+              montoSistema:m.sistema,montoDeclarado:m.declarado,diferencia:m.diferencia,
+            })));
+          }}
           setCajaId={setCajaId}
           setDeclaracionCierre={(medioPagoId, value) =>
             setDeclaracionesCierre((prev) => ({ ...prev, [medioPagoId]: value }))
@@ -789,6 +803,7 @@ type ArqueosCajaViewProps = {
   onAbrirArqueo: () => void;
   onCerrarArqueo: () => void;
   onSelectArqueo: (arqueo: ArqueoCaja) => void;
+  onRectificado: (resultado: EstadoRectificacion) => void;
   setCajaId: (value: string) => void;
   setDeclaracionCierre: (medioPagoId: string, value: string) => void;
   setFechaHoraApertura: (value: string) => void;
@@ -813,11 +828,14 @@ function ArqueosCajaView({
   onAbrirArqueo,
   onCerrarArqueo,
   onSelectArqueo,
+  onRectificado,
   setCajaId,
   setDeclaracionCierre,
   setFechaHoraApertura,
   setMontoInicial,
 }: ArqueosCajaViewProps) {
+  const [filtroRectificaciones,setFiltroRectificaciones]=useState<FiltroRectificaciones>("todos");
+  const arqueosFiltrados=filtrarPorRectificacion(arqueos,filtroRectificaciones);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_420px]">
       <section className="border-r p-4">
@@ -883,6 +901,10 @@ function ArqueosCajaView({
           <ResumenDato label="Egresos" value="$0" />
         </section>
 
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <SelectorRectificaciones valor={filtroRectificaciones} onChange={setFiltroRectificaciones} disponible={arqueos.every(a=>a.cantidadRectificaciones !== undefined)} />
+          <span className="text-xs text-muted-foreground">{arqueosFiltrados.length} de {arqueos.length} arqueos</span>
+        </div>
         <section className="overflow-hidden rounded-md border bg-card">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-secondary-foreground">
@@ -901,8 +923,8 @@ function ArqueosCajaView({
                     Cargando arqueos...
                   </td>
                 </tr>
-              ) : arqueos.length > 0 ? (
-                arqueos.map((arqueo) => (
+              ) : arqueosFiltrados.length > 0 ? (
+                arqueosFiltrados.map((arqueo) => (
                   <tr
                     key={arqueo.id}
                     className={`cursor-pointer border-b transition hover:bg-muted/50 ${
@@ -923,13 +945,13 @@ function ArqueosCajaView({
                     <td className={`p-3 text-right ${claseDiferencia(arqueo.diferencia)}`}>
                       {arqueo.diferencia === undefined ? "-" : formatearMoneda(arqueo.diferencia)}
                     </td>
-                    <td className="p-3">{arqueo.estado}</td>
+                    <td className="p-3"><div className="flex flex-wrap items-center gap-2"><span>{arqueo.estado}</span><DistintivoRectificacion cantidad={arqueo.cantidadRectificaciones}/></div></td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td className="p-6 text-center text-muted-foreground" colSpan={5}>
-                    No hay arqueos cargados.
+                    {filtroRectificaciones === "todos" ? "No hay arqueos cargados." : "No hay arqueos que coincidan con este filtro."}
                   </td>
                 </tr>
               )}
@@ -940,7 +962,7 @@ function ArqueosCajaView({
 
       {arqueoSeleccionado ? (
         <aside className="p-6">
-          <h2 className="mb-4 text-xl font-bold">Detalle de arqueo</h2>
+          <div className="mb-4 flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">Detalle de arqueo</h2><DistintivoRectificacion cantidad={arqueoSeleccionado.cantidadRectificaciones}/></div>
           <div className="space-y-3 rounded-md border bg-card p-4 text-sm shadow-sm">
             <DetalleDato label="Caja" value={arqueoSeleccionado.cajaNombre ?? "-"} />
             <DetalleDato label="Estado" value={arqueoSeleccionado.estado} />
@@ -948,7 +970,12 @@ function ArqueosCajaView({
             <DetalleDato label="Cierre" value={formatearFecha(arqueoSeleccionado.closedAt)} />
             <DetalleDato label="Monto inicial" value={formatearMoneda(arqueoSeleccionado.montoInicial)} />
             <DetalleDato label="Total ventas" value={formatearMoneda(arqueoSeleccionado.totalVentas)} />
+            {arqueoSeleccionado.estado === "cerrado" && <>
+              <DetalleDato label="Total declarado" value={arqueoSeleccionado.montoFinalDeclarado === undefined ? "—" : formatearMoneda(arqueoSeleccionado.montoFinalDeclarado)} />
+              <DetalleDato label="Diferencia" value={arqueoSeleccionado.diferencia === undefined ? "—" : formatearMoneda(arqueoSeleccionado.diferencia)} valueClassName={claseDiferencia(arqueoSeleccionado.diferencia)} />
+            </>}
           </div>
+          {arqueoSeleccionado.estado === "cerrado" && <RectificacionArqueo key={arqueoSeleccionado.id} arqueoId={arqueoSeleccionado.id} onRectificado={onRectificado} />}
           <div className="mt-4 rounded-md border bg-card p-4 text-sm shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h3 className="font-semibold">Medios de pago</h3>

@@ -1,3 +1,5 @@
+import {DistintivoRectificacion,SelectorRectificaciones} from "@/components/ventas/DistintivoRectificacion";
+import {filtrarPorRectificacion,type FiltroRectificaciones} from "@/lib/filtroRectificaciones";
 import {useEffect,useState} from "react";
 import {ArrowRight, CalendarDays, CheckCircle2, CircleDashed, History, LockKeyhole, RefreshCw, Wallet} from "lucide-react";
 import {supabase} from "@/lib/supabase";
@@ -13,6 +15,7 @@ type Operativo={id:string;caja_id:string;estado:string;opened_at:string;closed_a
 const monto=(value:string)=>{if(!/^\d+(?:[.,]\d{1,2})?$/.test(value)) throw new Error("Ingresá importes válidos con hasta dos decimales.");return Number(value.replace(",","."));};
 export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado?:()=>void}={}){
   const {localId}=useLocal(); const {tiene}=usePermisos();
+  const [filtroRectificaciones,setFiltroRectificaciones]=useState<FiltroRectificaciones>("todos");
   const puedeOperar=tiene("abrir_cerrar_caja"),puedeVer=tiene("ver_saldos_arqueo");
   const [arqueos,setArqueos]=useState<Operativo[]>([]),[saldos,setSaldos]=useState<ArqueoCaja[]>([]);
   const [cajas,setCajas]=useState<Caja[]>([]),[medios,setMedios]=useState<MedioPago[]>([]);
@@ -32,6 +35,7 @@ export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado
       :await supabase.rpc("abrir_caja",{p_caja_id:caja,p_monto_inicial:monto(inicial)});
     if(result.error)throw new Error(result.error.message);setMensaje(cerrar?"Caja cerrada correctamente.":"Caja abierta correctamente.");setDeclaraciones({});setInicial("");setRevision(n=>n+1);onEstadoCajaActualizado?.();
   }catch(e){setError(e instanceof Error?e.message:"No se pudo completar la operación.");}finally{setGuardando(false);}}
+  const historial=filtrarPorRectificacion(arqueos.map(a=>({...a,cantidadRectificaciones:saldos.find(s=>s.id===a.id)?.cantidadRectificaciones})),filtroRectificaciones);
   const cajaActual = cajas.find(c=>c.id===abierto?.caja_id);
   const moneda = (valor?:number) => valor === undefined ? "—" : new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS"}).format(valor);
   const fecha = (valor?:string) => valor && !Number.isNaN(Date.parse(valor)) ? new Date(valor).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}) : "—";
@@ -76,9 +80,9 @@ export function CajaOperativa({onEstadoCajaActualizado}:{onEstadoCajaActualizado
         </form>}
       </div>
       {puedeVer && <section aria-labelledby="historial-arqueos-titulo" className="overflow-hidden rounded-2xl border bg-card">
-        <header className="flex items-center gap-3 border-b p-5 sm:p-6"><History className="h-5 w-5 text-primary" aria-hidden="true"/><div><h2 id="historial-arqueos-titulo" className="font-bold">Historial de arqueos</h2><p className="mt-1 text-sm text-muted-foreground">Aperturas y saldos de tus cajas.</p></div></header>
+        <header className="flex flex-wrap items-center gap-3 border-b p-5 sm:p-6"><History className="h-5 w-5 text-primary" aria-hidden="true"/><div className="min-w-0 flex-1"><h2 id="historial-arqueos-titulo" className="font-bold">Historial de arqueos</h2><p className="mt-1 text-sm text-muted-foreground">Aperturas y saldos de tus cajas.</p></div><SelectorRectificaciones valor={filtroRectificaciones} onChange={setFiltroRectificaciones} disponible={arqueos.every(a=>saldos.find(s=>s.id===a.id)?.cantidadRectificaciones !== undefined)}/></header>
         <div className="overflow-x-auto"><table className="w-full whitespace-nowrap text-sm"><caption className="sr-only">Historial de arqueos y saldos</caption><thead><tr><th scope="col" className="px-5 py-4 text-left">Apertura</th><th scope="col" className="px-5 py-4 text-left">Caja</th><th scope="col" className="px-5 py-4 text-left">Estado</th><th scope="col" className="px-5 py-4 text-right">Monto inicial</th><th scope="col" className="px-5 py-4 text-right">Ventas</th><th scope="col" className="px-5 py-4 text-right">Diferencia</th></tr></thead><tbody>
-          {arqueos.length === 0?<tr><td colSpan={6} className="px-5 py-10 text-center text-muted-foreground">Todavía no hay arqueos registrados.</td></tr>:[...arqueos].sort((a,b)=>(b.opened_at ?? "").localeCompare(a.opened_at ?? "")).map(a=>{const saldo=saldos.find(s=>s.id===a.id);return <tr key={a.id} className="border-t"><td className="px-5 py-4">{fecha(a.opened_at)}</td><td className="px-5 py-4 font-medium">{cajas.find(c=>c.id===a.caja_id)?.nombre ?? "—"}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${a.estado === "abierto"?"bg-emerald-100 text-emerald-800":"bg-muted text-muted-foreground"}`}>{a.estado === "abierto"?"Abierto":a.estado === "cerrado"?"Cerrado":"Cancelado"}</span></td><td className="px-5 py-4 text-right tabular-nums">{moneda(saldo?.montoInicial)}</td><td className="px-5 py-4 text-right tabular-nums">{moneda(saldo?.totalVentas)}</td><td className={`px-5 py-4 text-right tabular-nums ${saldo?.diferencia !== undefined && saldo.diferencia<0?"text-destructive":"text-muted-foreground"}`}>{moneda(saldo?.diferencia)}</td></tr>;})}
+          {historial.length === 0?<tr><td colSpan={6} className="px-5 py-10 text-center text-muted-foreground">{filtroRectificaciones === "todos" ? "Todavía no hay arqueos registrados." : "No hay arqueos que coincidan con este filtro."}</td></tr>:[...historial].sort((a,b)=>(b.opened_at ?? "").localeCompare(a.opened_at ?? "")).map(a=>{const saldo=saldos.find(s=>s.id===a.id);return <tr key={a.id} className="border-t"><td className="px-5 py-4">{fecha(a.opened_at)}</td><td className="px-5 py-4 font-medium">{cajas.find(c=>c.id===a.caja_id)?.nombre ?? "—"}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${a.estado === "abierto"?"bg-emerald-100 text-emerald-800":"bg-muted text-muted-foreground"}`}>{a.estado === "abierto"?"Abierto":a.estado === "cerrado"?"Cerrado":"Cancelado"}</span><div className="mt-1"><DistintivoRectificacion cantidad={a.cantidadRectificaciones}/></div></td><td className="px-5 py-4 text-right tabular-nums">{moneda(saldo?.montoInicial)}</td><td className="px-5 py-4 text-right tabular-nums">{moneda(saldo?.totalVentas)}</td><td className={`px-5 py-4 text-right tabular-nums ${saldo?.diferencia !== undefined && saldo.diferencia<0?"text-destructive":"text-muted-foreground"}`}>{moneda(saldo?.diferencia)}</td></tr>;})}
         </tbody></table></div>
       </section>}
     </>}
