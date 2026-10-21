@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { MedioPago, PedidoItem } from "@/lib/types";
 import { normalizarNombreMedioPago } from "@/services/mediosPagoService";
-import { crearCobroQr, consultarCobroQr, type CobroQr } from "@/services/mercadoPagoQrService";
+import { cancelarCobroQr, crearCobroQr, consultarCobroQr, obtenerCajaQr, type CobroQr } from "@/services/mercadoPagoQrService";
 import { useLocal } from "@/context/LocalContext";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
 import {
@@ -89,7 +89,11 @@ export function CerrarPedidoDialog({
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<CobroQr | null>(null);
+  const [modoQr, setModoQr] = useState<"static" | "dynamic">("static");
+  const [qrCaja, setQrCaja] = useState<{ qrData: string; templateDocument: string | null } | null>(null);
+  const [cargandoCaja, setCargandoCaja] = useState(false);
   const [generandoQr, setGenerandoQr] = useState(false);
+  const [cancelandoQr, setCancelandoQr] = useState(false);
   const totalPagado = useMemo(
     () =>
       pagos.reduce((acc, pago) => {
@@ -123,6 +127,7 @@ export function CerrarPedidoDialog({
   const excedente = Math.max(0, totalPagado - objetivoCobro);
   const medioQrSeleccionado = mediosPago.some((medio) => medio.id === pagos[0]?.medioPagoId && /qr|mercadopago/.test(normalizarNombreMedioPago(medio.nombre)));
   const pagoQrUnico = medioQrSeleccionado && pagos.length === 1 && !cobroParcial;
+  const qrActivo = Boolean(qr && ["creando", "pendiente", "verificado"].includes(qr.estado));
 
   useEffect(() => {
     if (!open || !qr?.intentoId || !["pendiente", "creando", "verificado"].includes(qr.estado)) return;
@@ -158,9 +163,37 @@ export function CerrarPedidoDialog({
     try {
       setGenerandoQr(true);
       setError(null);
-      setQr(await crearCobroQr(pedidoId, pagos[0].medioPagoId));
+      setQr(await crearCobroQr(pedidoId, pagos[0].medioPagoId, modoQr));
     } catch (err) { setError(err instanceof Error ? err.message : "No se pudo generar el QR."); }
     finally { setGenerandoQr(false); }
+  };
+
+  const prepararQrImpreso = async () => {
+    try {
+      setCargandoCaja(true);
+      setError(null);
+      setQrCaja(await obtenerCajaQr());
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo consultar el QR impreso."); }
+    finally { setCargandoCaja(false); }
+  };
+
+  const cancelarOrdenQr = async () => {
+    if (!qr) return;
+    try {
+      setCancelandoQr(true);
+      setError(null);
+      const resultado = await cancelarCobroQr(qr.intentoId);
+      setQr(resultado);
+      if (resultado.estado === "registrado") {
+        await onQrConfirmado?.();
+        onClose();
+      } else if (resultado.estado === "acreditado_sin_registrar") {
+        setError(resultado.error ?? "El pago fue acreditado pero requiere conciliación manual.");
+      } else if (resultado.estado !== "cancelado" && resultado.estado !== "vencido") {
+        setError("La orden sigue activa. Consultá su estado antes de cobrar por otro medio.");
+      }
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo cancelar la orden QR."); }
+    finally { setCancelandoQr(false); }
   };
 
   useEffect(() => {
@@ -184,6 +217,8 @@ export function CerrarPedidoDialog({
         setError(null);
         setCobroParcial(false);
         setQr(null);
+        setModoQr("static");
+        setQrCaja(null);
         setItemsCobroParcial({});
         setCantidadesCobradas({});
         const medios = await obtenerMediosPago(localIdActual);
@@ -529,7 +564,7 @@ export function CerrarPedidoDialog({
             <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-semibold">
               <span>Pago</span>
               <Button
-                disabled={cargando || confirmando || Boolean(qr?.qrData) || mediosPago.length === 0}
+                disabled={cargando || confirmando || qrActivo || mediosPago.length === 0}
                 size="icon"
                 type="button"
                 variant="secondary"
@@ -545,7 +580,7 @@ export function CerrarPedidoDialog({
                     Medio
                     <select
                       className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
-                      disabled={cargando || confirmando || Boolean(qr?.qrData)}
+                      disabled={cargando || confirmando || qrActivo}
                       value={pago.medioPagoId}
                       onChange={(event) =>
                         actualizarPago(pago.id, { medioPagoId: event.target.value })
@@ -563,7 +598,7 @@ export function CerrarPedidoDialog({
                     Importe
                     <Input
                       className="mt-1"
-                      disabled={confirmando || Boolean(qr?.qrData)}
+                      disabled={confirmando || qrActivo}
                       inputMode="decimal"
                       type="text"
                       value={pago.monto}
@@ -572,7 +607,7 @@ export function CerrarPedidoDialog({
                   </label>
 
                   <Button
-                    disabled={confirmando || Boolean(qr?.qrData) || pagos.length === 1}
+                    disabled={confirmando || qrActivo || pagos.length === 1}
                     size="icon"
                     type="button"
                     variant="ghost"
@@ -605,7 +640,7 @@ export function CerrarPedidoDialog({
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>Total cobrado</span>
+                  <span>Total al confirmar</span>
                   <span className="font-semibold">${totalCobradoAcumulado.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
@@ -624,10 +659,24 @@ export function CerrarPedidoDialog({
                 </div>
               </div>
               {medioQrSeleccionado && !pagoQrUnico && <p className="text-sm text-muted-foreground">El QR automático admite por ahora un único pago por el saldo completo.</p>}
-              {pagoQrUnico && qr?.qrData && qr.estado !== "registrado" && <div className="flex flex-col items-center gap-3 border-t pt-4 text-center">
-                <QRCodeSVG value={qr.qrData} size={220} marginSize={2} aria-label="Código QR para pagar con Mercado Pago" />
-                <p className="text-sm font-semibold">Escaneá para pagar ${qr.monto.toLocaleString("es-AR")}</p>
-                <p className="text-xs text-muted-foreground">Esperando confirmación de Mercado Pago. Orden vigente hasta {new Date(qr.venceAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })}.</p>
+              {pagoQrUnico && <div className="space-y-3 border-t pt-4">
+                <div className="grid grid-cols-2 rounded-md border p-1 text-sm" role="group" aria-label="Tipo de QR">
+                  <Button type="button" size="sm" variant={modoQr === "static" ? "default" : "ghost"} disabled={qrActivo} onClick={() => setModoQr("static")}>QR impreso</Button>
+                  <Button type="button" size="sm" variant={modoQr === "dynamic" ? "default" : "ghost"} disabled={qrActivo} onClick={() => setModoQr("dynamic")}>En pantalla</Button>
+                </div>
+                {modoQr === "static" && !qrCaja && <Button type="button" variant="outline" size="sm" disabled={cargandoCaja} onClick={prepararQrImpreso}>
+                  {cargandoCaja ? "Consultando caja..." : "Ver QR de la caja"}
+                </Button>}
+                {modoQr === "static" && qrCaja && <div className="flex flex-col items-center gap-2 text-center">
+                  <QRCodeSVG value={qrCaja.qrData} size={160} marginSize={2} aria-label="QR fijo de la caja Mercado Pago" />
+                  {qrCaja.templateDocument && <a className="text-sm underline" href={qrCaja.templateDocument} target="_blank" rel="noreferrer">Abrir plantilla para imprimir</a>}
+                </div>}
+                {qr && qrActivo && <div className="flex flex-col items-center gap-3 text-center">
+                  {qr.modo === "dynamic" && qr.qrData && <QRCodeSVG value={qr.qrData} size={220} marginSize={2} aria-label="Código QR para pagar con Mercado Pago" />}
+                  <p className="text-sm font-semibold">{qr.modo === "static" ? "Cobro cargado en el QR impreso" : "Escaneá para pagar"} ${qr.monto.toLocaleString("es-AR")}</p>
+                  <p className="text-xs text-muted-foreground">Esperando confirmación de Mercado Pago. Orden vigente hasta {new Date(qr.venceAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })}.</p>
+                  <Button type="button" size="sm" variant="outline" disabled={cancelandoQr} onClick={cancelarOrdenQr}>{cancelandoQr ? "Cancelando..." : "Cancelar orden QR"}</Button>
+                </div>}
               </div>}
             </div>
           </section>
@@ -639,7 +688,7 @@ export function CerrarPedidoDialog({
               <input
                 checked={cobroParcial}
                 className="h-4 w-4"
-                disabled={confirmando || Boolean(qr?.qrData)}
+                disabled={confirmando || qrActivo}
                 type="checkbox"
                 onChange={(event) => {
                   setCobroParcial(event.target.checked);
@@ -660,11 +709,11 @@ export function CerrarPedidoDialog({
             Cancelar
           </Button>
           <Button
-            disabled={confirmando || cargando || generandoQr || Boolean(qr?.qrData) || mediosPago.length === 0 || (medioQrSeleccionado && !pagoQrUnico)}
+            disabled={confirmando || cargando || generandoQr || cancelandoQr || qrActivo || mediosPago.length === 0 || (medioQrSeleccionado && !pagoQrUnico)}
             type="button"
             onClick={pagoQrUnico ? generarQr : confirmar}
           >
-            {pagoQrUnico ? (generandoQr ? "Generando QR..." : "Generar QR") : cobroParcial ? "Registrar cobro" : "Cerrar venta"}
+            {pagoQrUnico ? (generandoQr ? "Cargando cobro..." : modoQr === "static" ? "Cargar monto al QR" : "Generar QR") : cobroParcial ? "Registrar cobro" : "Cerrar venta"}
           </Button>
         </DialogFooter>
       </DialogContent>

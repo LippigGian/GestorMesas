@@ -4,14 +4,15 @@ export type EstadoQr = "creando" | "pendiente" | "verificado" | "registrado" | "
 export type CobroQr = {
   intentoId: string;
   estado: EstadoQr;
+  modo: "static" | "dynamic";
   monto: number;
   qrData: string | null;
   venceAt: string;
   error?: string;
 };
 
-async function invocar(body: object): Promise<CobroQr> {
-  const { data, error } = await supabase.functions.invoke<CobroQr & { error?: string }>("mercado-pago-qr", { body });
+async function invocar<T>(body: object): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T & { error?: string; estado?: EstadoQr }>("mercado-pago-qr", { body });
   if (error) {
     if (error.context instanceof Response) {
       const detalle: unknown = await error.context.json().catch(() => null);
@@ -24,13 +25,21 @@ async function invocar(body: object): Promise<CobroQr> {
   }
   if (!data) throw new Error("Mercado Pago no respondió.");
   if (data.error && data.estado !== "acreditado_sin_registrar") throw new Error(data.error);
-  return data;
+  return data as T;
 }
 
-export function crearCobroQr(pedidoId: string, medioPagoId: string) {
-  return invocar({ accion: "crear", pedidoId, medioPagoId });
+export function crearCobroQr(pedidoId: string, medioPagoId: string, modo: "static" | "dynamic") {
+  return invocar<CobroQr>({ accion: "crear", pedidoId, medioPagoId, modo });
 }
 
 export function consultarCobroQr(intentoId: string) {
-  return invocar({ accion: "consultar", intentoId });
+  return invocar<CobroQr>({ accion: "consultar", intentoId });
+}
+
+export function cancelarCobroQr(intentoId: string) {
+  return invocar<CobroQr>({ accion: "cancelar", intentoId });
+}
+
+export function obtenerCajaQr() {
+  return invocar<{ qrData: string; templateDocument: string | null }>({ accion: "caja" });
 }
