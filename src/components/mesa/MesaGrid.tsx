@@ -600,6 +600,14 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
     }
   };
 
+  const finalizarMesaTrasQr = () => {
+    if (mesaSeleccionada) actualizarMesaEnSectores({ ...mesaSeleccionada, estado: 'libre', personas: 0, productos: [] });
+    setMesaSeleccionada(null);
+    setPedidoActivo(null);
+    setPedidoItems([]);
+    setErrorMesas(null);
+  };
+
   const confirmarProductosMesa = async (productos: ProductoPendientePedido[]) => {
     if (!pedidoActivo) return;
     const sigueVigente = controlSeleccion.current.capturar();
@@ -846,6 +854,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
         onMoverMesa={moverMesa}
         onCobroParcial={registrarCobroParcialMesa}
         onCerrarMesa={cerrarMesa}
+        onQrConfirmado={finalizarMesaTrasQr}
         onCancelarPedido={cancelarPedidoMesa}
         onAplicarDescuento={aplicarDescuento}
       />

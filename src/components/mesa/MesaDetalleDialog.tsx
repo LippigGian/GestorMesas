@@ -28,6 +28,7 @@ type Props = {
     itemsCobrados?: ItemCobroParcialInput[]
   ) => Promise<void> | void;
   onCerrarMesa: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onQrConfirmado?: () => Promise<void> | void;
   onCancelarPedido: () => Promise<void>;
   onAplicarDescuento: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };
@@ -45,6 +46,7 @@ export function MesaDetalleDialog({
   onMoverMesa,
   onCobroParcial,
   onCerrarMesa,
+  onQrConfirmado,
   onCancelarPedido,
   onAplicarDescuento,
 }: Props) {
@@ -313,6 +315,7 @@ export function MesaDetalleDialog({
         onActualizarCantidadItem={onActualizarCantidadItem}
         onAplicarDescuento={onAplicarDescuento}
         onCerrarPedido={onCerrarMesa}
+        onQrConfirmado={onQrConfirmado}
         onCobroParcial={onCobroParcial}
         onConfirmarProductos={onConfirmarProductos}
         onEliminarItem={onEliminarItem}

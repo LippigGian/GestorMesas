@@ -1,3 +1,7 @@
 [functions.invitar-empleado]
 # El handler verifica el JWT contra Auth con getUser y la autorización en SQL.
 verify_jwt = false
+
+[functions.mercado-pago-qr]
+# La función valida la sesión con Auth antes de crear o consultar órdenes.
+verify_jwt = false

@@ -481,21 +481,21 @@ export function Configuracion() {
           ) : seccionActivaId === "mercado-pago" ? (
             <div className="space-y-4">
               <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                Esta seccion queda preparada para configurar Mercado Pago mas adelante.
+                La conexión de QR se configura en Supabase. No ingreses el Access Token en esta pantalla.
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-md border p-4">
                   <h3 className="font-semibold text-foreground">QR dinamico</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Aca podremos activar la generacion de QR para cerrar pedidos.
+                    Al elegir el medio de pago QR en una venta, se genera una orden única por el saldo completo y se espera su acreditación.
                   </p>
                 </div>
 
                 <div className="rounded-md border p-4">
-                  <h3 className="font-semibold text-foreground">Webhooks</h3>
+                  <h3 className="font-semibold text-foreground">Confirmación</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Aca podremos guardar el estado de integracion para recibir pagos aprobados.
+                    La pantalla consulta el estado de la orden cada pocos segundos. Los webhooks quedan para una próxima etapa.
                   </p>
                 </div>
               </div>

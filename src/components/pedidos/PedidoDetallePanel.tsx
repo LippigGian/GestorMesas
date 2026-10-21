@@ -33,6 +33,7 @@ type PedidoDetallePanelProps = {
     itemsCobrados?: ItemCobroParcialInput[]
   ) => Promise<void> | void;
   onCerrarPedido: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onQrConfirmado?: () => Promise<void> | void;
   onAplicarDescuento?: (descuento: DescuentoPedidoInput) => Promise<void> | void;
 };
 
@@ -79,6 +80,7 @@ export function PedidoDetallePanel({
   onEliminarItem,
   onCobroParcial,
   onCerrarPedido,
+  onQrConfirmado,
   onAplicarDescuento,
 }: PedidoDetallePanelProps) {
   const [busqueda, setBusqueda] = useState("");
@@ -769,6 +771,7 @@ export function PedidoDetallePanel({
             onClose={() => setMostrandoCierre(false)}
             onCobroParcial={onCobroParcial}
             onConfirmar={onCerrarPedido}
+            onQrConfirmado={onQrConfirmado}
           />
         </>
       ) : (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { MedioPago, PedidoItem } from "@/lib/types";
+import { normalizarNombreMedioPago } from "@/services/mediosPagoService";
+import { crearCobroQr, consultarCobroQr, type CobroQr } from "@/services/mercadoPagoQrService";
 import { useLocal } from "@/context/LocalContext";
 import { obtenerMediosPago } from "@/services/mediosPagoService";
 import {
@@ -31,6 +34,7 @@ type Props = {
     itemsCobrados?: ItemCobroParcialInput[]
   ) => Promise<void> | void;
   onConfirmar: (pagos: PagoPedidoInput[]) => Promise<void> | void;
+  onQrConfirmado?: () => Promise<void> | void;
 };
 
 type PagoForm = {
@@ -72,6 +76,7 @@ export function CerrarPedidoDialog({
   onClose,
   onCobroParcial,
   onConfirmar,
+  onQrConfirmado,
 }: Props) {
   const { cargandoLocal, errorLocal, localId } = useLocal();
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
@@ -83,6 +88,8 @@ export function CerrarPedidoDialog({
   const [cargando, setCargando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qr, setQr] = useState<CobroQr | null>(null);
+  const [generandoQr, setGenerandoQr] = useState(false);
   const totalPagado = useMemo(
     () =>
       pagos.reduce((acc, pago) => {
@@ -114,6 +121,47 @@ export function CerrarPedidoDialog({
   const saldoRestanteLuegoDelCobro = Math.max(0, total - totalCobradoAcumulado);
   const faltante = Math.max(0, objetivoCobro - totalPagado);
   const excedente = Math.max(0, totalPagado - objetivoCobro);
+  const medioQrSeleccionado = mediosPago.some((medio) => medio.id === pagos[0]?.medioPagoId && /qr|mercadopago/.test(normalizarNombreMedioPago(medio.nombre)));
+  const pagoQrUnico = medioQrSeleccionado && pagos.length === 1 && !cobroParcial;
+
+  useEffect(() => {
+    if (!open || !qr?.intentoId || !["pendiente", "creando", "verificado"].includes(qr.estado)) return;
+    let vigente = true;
+    let enCurso = false;
+    const timer = window.setInterval(async () => {
+      if (enCurso || !vigente) return;
+      enCurso = true;
+      try {
+        const resultado = await consultarCobroQr(qr.intentoId);
+        if (!vigente) return;
+        setQr(resultado);
+        if (resultado.estado === "registrado") {
+          await onQrConfirmado?.();
+          onClose();
+        } else if (resultado.estado === "acreditado_sin_registrar") {
+          setError(resultado.error ?? "El pago fue acreditado pero requiere conciliación manual.");
+        } else if (["vencido", "cancelado", "fallido"].includes(resultado.estado)) {
+          setError("El QR ya no está disponible. Podés generar uno nuevo.");
+        }
+      } catch (err) {
+        if (vigente) setError(err instanceof Error ? err.message : "No se pudo verificar el QR.");
+      } finally { enCurso = false; }
+    }, 2500);
+    return () => { vigente = false; window.clearInterval(timer); };
+  }, [open, qr?.intentoId, qr?.estado, onQrConfirmado, onClose]);
+
+  const generarQr = async () => {
+    if (!pagoQrUnico || Math.abs(totalPagado - pendiente) > 0.01) {
+      setError("El QR debe cubrir exactamente el saldo pendiente en un único pago.");
+      return;
+    }
+    try {
+      setGenerandoQr(true);
+      setError(null);
+      setQr(await crearCobroQr(pedidoId, pagos[0].medioPagoId));
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo generar el QR."); }
+    finally { setGenerandoQr(false); }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +183,7 @@ export function CerrarPedidoDialog({
         setCargando(true);
         setError(null);
         setCobroParcial(false);
+        setQr(null);
         setItemsCobroParcial({});
         setCantidadesCobradas({});
         const medios = await obtenerMediosPago(localIdActual);
@@ -263,6 +312,11 @@ export function CerrarPedidoDialog({
     }
 
     const suma = pagosNormalizados.reduce((acc, pago) => acc + pago.monto, 0);
+
+    if (medioQrSeleccionado) {
+      setError("Para cobrar con QR usá Generar QR y esperá la acreditación de Mercado Pago.");
+      return;
+    }
 
     if (cobroParcial) {
       if (!onCobroParcial) {
@@ -475,7 +529,7 @@ export function CerrarPedidoDialog({
             <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-semibold">
               <span>Pago</span>
               <Button
-                disabled={cargando || confirmando || mediosPago.length === 0}
+                disabled={cargando || confirmando || Boolean(qr?.qrData) || mediosPago.length === 0}
                 size="icon"
                 type="button"
                 variant="secondary"
@@ -491,7 +545,7 @@ export function CerrarPedidoDialog({
                     Medio
                     <select
                       className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm"
-                      disabled={cargando || confirmando}
+                      disabled={cargando || confirmando || Boolean(qr?.qrData)}
                       value={pago.medioPagoId}
                       onChange={(event) =>
                         actualizarPago(pago.id, { medioPagoId: event.target.value })
@@ -509,7 +563,7 @@ export function CerrarPedidoDialog({
                     Importe
                     <Input
                       className="mt-1"
-                      disabled={confirmando}
+                      disabled={confirmando || Boolean(qr?.qrData)}
                       inputMode="decimal"
                       type="text"
                       value={pago.monto}
@@ -518,7 +572,7 @@ export function CerrarPedidoDialog({
                   </label>
 
                   <Button
-                    disabled={confirmando || pagos.length === 1}
+                    disabled={confirmando || Boolean(qr?.qrData) || pagos.length === 1}
                     size="icon"
                     type="button"
                     variant="ghost"
@@ -569,6 +623,12 @@ export function CerrarPedidoDialog({
                   <span className="font-semibold">${excedente.toLocaleString()}</span>
                 </div>
               </div>
+              {medioQrSeleccionado && !pagoQrUnico && <p className="text-sm text-muted-foreground">El QR automático admite por ahora un único pago por el saldo completo.</p>}
+              {pagoQrUnico && qr?.qrData && qr.estado !== "registrado" && <div className="flex flex-col items-center gap-3 border-t pt-4 text-center">
+                <QRCodeSVG value={qr.qrData} size={220} marginSize={2} aria-label="Código QR para pagar con Mercado Pago" />
+                <p className="text-sm font-semibold">Escaneá para pagar ${qr.monto.toLocaleString("es-AR")}</p>
+                <p className="text-xs text-muted-foreground">Esperando confirmación de Mercado Pago. Orden vigente hasta {new Date(qr.venceAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })}.</p>
+              </div>}
             </div>
           </section>
         </div>
@@ -579,7 +639,7 @@ export function CerrarPedidoDialog({
               <input
                 checked={cobroParcial}
                 className="h-4 w-4"
-                disabled={confirmando}
+                disabled={confirmando || Boolean(qr?.qrData)}
                 type="checkbox"
                 onChange={(event) => {
                   setCobroParcial(event.target.checked);
@@ -600,11 +660,11 @@ export function CerrarPedidoDialog({
             Cancelar
           </Button>
           <Button
-            disabled={confirmando || cargando || mediosPago.length === 0}
+            disabled={confirmando || cargando || generandoQr || Boolean(qr?.qrData) || mediosPago.length === 0 || (medioQrSeleccionado && !pagoQrUnico)}
             type="button"
-            onClick={confirmar}
+            onClick={pagoQrUnico ? generarQr : confirmar}
           >
-            {cobroParcial ? "Registrar cobro" : "Cerrar venta"}
+            {pagoQrUnico ? (generandoQr ? "Generando QR..." : "Generar QR") : cobroParcial ? "Registrar cobro" : "Cerrar venta"}
           </Button>
         </DialogFooter>
       </DialogContent>

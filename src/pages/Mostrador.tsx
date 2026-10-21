@@ -459,6 +459,15 @@ export function Mostrador() {
           }
           onActualizarCantidadItem={cambiarCantidadItem}
           onCerrarPedido={finalizarPedido}
+          onQrConfirmado={() => {
+            if (!pedidoSeleccionado) return;
+            setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
+            setPedidoSeleccionado(null);
+            setPedidoItems([]);
+            setMenuPedidoAbierto(false);
+            setCliente('');
+            setErrorMostrador(null);
+          }}
           onCobroParcial={registrarCobroParcial}
           onConfirmarProductos={confirmarProductos}
           onEliminarItem={eliminarItem}
