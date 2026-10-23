@@ -5,6 +5,7 @@ export type CobroQr = {
   intentoId: string;
   estado: EstadoQr;
   modo: "static" | "dynamic";
+  medioPagoId: string;
   monto: number;
   qrData: string | null;
   venceAt: string;
@@ -38,6 +39,40 @@ export function consultarCobroQr(intentoId: string) {
 
 export function cancelarCobroQr(intentoId: string) {
   return invocar<CobroQr>({ accion: "cancelar", intentoId });
+}
+
+export async function obtenerCobroQrActivo(pedidoId: string) {
+  const { data, error } = await supabase.from("mercado_pago_qr_intentos")
+    .select("id")
+    .eq("pedido_id", pedidoId)
+    .in("estado", ["creando", "pendiente", "verificado"])
+    .maybeSingle();
+  if (error) throw new Error("No se pudo comprobar si el pedido tiene un QR activo.");
+  return data ? consultarCobroQr(data.id) : null;
+}
+
+export async function obtenerCobroQrRegistrado(pedidoId: string) {
+  const { data, error } = await supabase.from("mercado_pago_qr_intentos")
+    .select("id")
+    .eq("pedido_id", pedidoId)
+    .eq("estado", "registrado")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error("No se pudo comprobar el pago QR del pedido.");
+  return data ? consultarCobroQr(data.id) : null;
+}
+
+export async function obtenerRevisionQrPedido(pedidoId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("mercado_pago_qr_intentos")
+    .select("motivo_revision")
+    .eq("pedido_id", pedidoId)
+    .eq("requiere_revision", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error("No se pudo comprobar si el QR requiere revision.");
+  return data?.motivo_revision ?? null;
 }
 
 export function obtenerCajaQr() {

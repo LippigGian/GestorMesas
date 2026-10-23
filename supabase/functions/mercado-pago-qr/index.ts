@@ -1,11 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.111.0";
+import { reconcileAttempt, qrReference, type QrAttempt } from "../_shared/qrReconcile.ts";
 
-type Intento = {
-  id: string; local_id: string; pedido_id: string; medio_pago_id: string;
-  arqueo_caja_id: string; monto: number; estado: string; idempotency_key: string;
-  mp_order_id: string | null; qr_data: string | null; vence_at: string;
-  modo: "static" | "dynamic"; pos_external_id: string | null; cancel_idempotency_key: string;
-};
+type Intento = QrAttempt;
 type Orden = {
   id?: string; status?: string; status_detail?: string; external_reference?: string;
   total_amount?: string; total_paid_amount?: string; currency?: string;
@@ -24,10 +20,10 @@ function respuesta(status: number, body: object, origin: string) {
   } });
 }
 
-function referencia(id: string) { return `GM_${id.replaceAll("-", "")}`; }
+function referencia(id: string) { return qrReference(id); }
 function montoTexto(monto: number) { return Number(monto).toFixed(2); }
 function vista(intento: Intento, estado = intento.estado) {
-  return { intentoId: intento.id, estado, modo: intento.modo, monto: Number(intento.monto), qrData: intento.qr_data, venceAt: intento.vence_at };
+  return { intentoId: intento.id, estado, modo: intento.modo, medioPagoId: intento.medio_pago_id, monto: Number(intento.monto), qrData: intento.qr_data, venceAt: intento.vence_at };
 }
 
 Deno.serve(async (req) => {
@@ -63,38 +59,12 @@ Deno.serve(async (req) => {
   const headers = { Authorization: `Bearer ${tokenMp}`, Accept: "application/json" };
 
   async function consultar(intento: Intento) {
-    if (intento.estado === "registrado") return respuesta(200, vista(intento), origin);
-    if (["vencido", "cancelado", "fallido"].includes(intento.estado)) return respuesta(200, vista(intento), origin);
-    if (!intento.mp_order_id) return respuesta(200, vista(intento), origin);
-    let orden: Orden;
-    try {
-      const res = await fetch(`${urlMp}/${encodeURIComponent(intento.mp_order_id)}`, { headers });
-      if (!res.ok) return respuesta(502, { error: "No se pudo verificar la orden con Mercado Pago. No se registró ningún cobro." }, origin);
-      orden = await res.json() as Orden;
-    } catch { return respuesta(502, { error: "No se pudo consultar Mercado Pago. Reintentá sin crear otro QR." }, origin); }
-    if (orden.id !== intento.mp_order_id || orden.external_reference !== referencia(intento.id)
-      || Math.abs(Number(orden.total_amount) - Number(intento.monto)) > 0.01) {
-      return respuesta(502, { error: "La orden no coincide con este pedido. No se registró el cobro." }, origin);
+    const result = await reconcileAttempt(admin, tokenMp, intento);
+    if (result.estado === "acreditado_sin_registrar" || result.estado === "revision") {
+      return respuesta(200, { ...vista(intento, "acreditado_sin_registrar"), error: result.error }, origin);
     }
-    if (orden.status === "processed" && orden.status_detail === "processed") {
-      const pagosAcreditados = orden.transactions?.payments?.filter((pago) => pago.status === "processed" && pago.status_detail === "accredited") ?? [];
-      const montoAcreditado = pagosAcreditados.reduce((suma, pago) => suma + Number(pago.paid_amount), 0);
-      if (pagosAcreditados.length !== 1 || !Number.isFinite(montoAcreditado)
-        || Math.abs(montoAcreditado - Number(intento.monto)) > 0.01 || (orden.currency && orden.currency !== "ARS")) {
-        return respuesta(502, { error: "El importe acreditado no coincide. Requiere conciliación manual." }, origin);
-      }
-      const { error: verificarError } = await admin.from("mercado_pago_qr_intentos").update({ estado: "verificado", updated_at: new Date().toISOString() }).eq("id", intento.id).in("estado", ["pendiente", "verificado"]);
-      if (verificarError) return respuesta(500, { error: "Pago acreditado, pero no se pudo guardar la verificación. Reintentá la consulta." }, origin);
-      const { error: registrarError } = await userClient.rpc("registrar_cobro_qr_mercado_pago", { p_intento_id: intento.id });
-      if (registrarError) return respuesta(200, { ...vista(intento, "acreditado_sin_registrar"), error: `Mercado Pago acreditó el pago, pero no pudo registrarse en la venta: ${registrarError.message}. No vuelvas a cobrar; conciliá esta orden: ${intento.mp_order_id}.` }, origin);
-      return respuesta(200, { ...vista(intento, "registrado"), qrData: null }, origin);
-    }
-    if (["canceled", "expired", "refunded"].includes(orden.status ?? "")) {
-      const estado = orden.status === "expired" ? "vencido" : "cancelado";
-      await admin.from("mercado_pago_qr_intentos").update({ estado, updated_at: new Date().toISOString() }).eq("id", intento.id);
-      return respuesta(200, vista(intento, estado), origin);
-    }
-    return respuesta(200, vista(intento, "pendiente"), origin);
+    if (result.error) return respuesta(502, { error: result.error }, origin);
+    return respuesta(200, { ...vista(intento, result.estado), qrData: result.estado === "registrado" ? null : intento.qr_data }, origin);
   }
 
   if (input.accion === "caja") {
@@ -123,9 +93,11 @@ Deno.serve(async (req) => {
     if (!intentoCancelar.mp_order_id) return respuesta(409, { error: "La orden aún no tiene ID de Mercado Pago. Reintentá la consulta antes de cancelarla." }, origin);
     const comprobacion = await consultar(intentoCancelar);
     if (!comprobacion.ok) return comprobacion;
+    const estadoComprobado = (await comprobacion.clone().json()) as { estado?: string };
+    if (estadoComprobado.estado !== "pendiente") return comprobacion;
     const { data: actualizado } = await admin.from("mercado_pago_qr_intentos").select("*").eq("id", intentoCancelar.id).single();
     if (!actualizado) return respuesta(503, { error: "No se pudo verificar el estado actual de la orden." }, origin);
-    if (actualizado.estado !== "pendiente") return comprobacion;
+    if (actualizado.estado !== "pendiente" || actualizado.requiere_revision) return comprobacion;
     try {
       const res = await fetch(`${urlMp}/${encodeURIComponent(intentoCancelar.mp_order_id)}/cancel`, {
         method: "POST", headers: { ...headers, "Content-Type": "application/json", "X-Idempotency-Key": intentoCancelar.cancel_idempotency_key },
@@ -218,7 +190,7 @@ Deno.serve(async (req) => {
     return respuesta(502, { error: "Mercado Pago devolvió una orden incompleta. No la cobres; revisá la integración." }, origin);
   }
   const { data: guardado, error: guardarError } = await admin.from("mercado_pago_qr_intentos").update({
-    estado: "pendiente", mp_order_id: orden.id, qr_data: orden.type_response.qr_data, updated_at: new Date().toISOString(),
+    estado: "pendiente", mp_order_id: orden.id, qr_data: orden.type_response?.qr_data ?? null, updated_at: new Date().toISOString(),
   }).eq("id", intento.id).select("*").single();
   if (guardarError || !guardado) return respuesta(500, { error: "El QR se creó pero no se pudo guardar. No generes otro; contactá al administrador." }, origin);
   return respuesta(200, vista(guardado as Intento), origin);

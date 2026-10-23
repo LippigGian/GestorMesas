@@ -567,7 +567,7 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
       await actualizarEstadoMesa(mesaSeleccionada.id, 'libre', 0);
     } catch (err) {
       setErrorMesas(err instanceof Error ? err.message : 'No se pudo cerrar la mesa');
-      return;
+      throw err;
     }
 
     actualizarMesaEnSectores({
@@ -601,10 +601,6 @@ export function MesaGrid({ modoEdicion, sectorActual, salones }: Props) {
   };
 
   const finalizarMesaTrasQr = () => {
-    if (mesaSeleccionada) actualizarMesaEnSectores({ ...mesaSeleccionada, estado: 'libre', personas: 0, productos: [] });
-    setMesaSeleccionada(null);
-    setPedidoActivo(null);
-    setPedidoItems([]);
     setErrorMesas(null);
   };
 

@@ -5,3 +5,11 @@ verify_jwt = false
 [functions.mercado-pago-qr]
 # La función valida la sesión con Auth antes de crear o consultar órdenes.
 verify_jwt = false
+
+[functions.mercado-pago-qr-webhook]
+# Mercado Pago firma las notificaciones; no envia un JWT de Supabase.
+verify_jwt = false
+
+[functions.mercado-pago-qr-sync]
+# El cron se autentica con un secreto independiente.
+verify_jwt = false

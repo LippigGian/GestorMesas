@@ -4,6 +4,7 @@ import { MessageSquare, Minus, Percent, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CerrarPedidoDialog } from "@/components/pedidos/CerrarPedidoDialog";
+import { obtenerCobroQrRegistrado, obtenerRevisionQrPedido } from "@/services/mercadoPagoQrService";
 import { useCatalogo } from "@/context/CatalogoContext";
 import type { Pedido, PedidoItem, Producto } from "@/lib/types";
 import type {
@@ -87,6 +88,8 @@ export function PedidoDetallePanel({
   const [confirmando, setConfirmando] = useState(false);
   const [itemActualizandoId, setItemActualizandoId] = useState<string | null>(null);
   const [mostrandoCierre, setMostrandoCierre] = useState(false);
+  const [pagoQrConfirmado, setPagoQrConfirmado] = useState(false);
+  const [revisionQr, setRevisionQr] = useState<string | null>(null);
   const { tiene } = usePermisos();
   const [itemsPendientes, setItemsPendientes] = useState<ProductoPendienteUI[]>([]);
   useEffect(() => {
@@ -114,6 +117,38 @@ export function PedidoDetallePanel({
     () => productosActivos.filter((producto) => producto.favorito),
     [productosActivos]
   );
+
+  useEffect(() => {
+    setPagoQrConfirmado(false);
+    setRevisionQr(null);
+  }, [pedido?.id]);
+
+  useEffect(() => {
+    if (pagoQrConfirmado) return;
+    if (!pedido?.id) return;
+    let vigente = true;
+    const comprobarPago = () => {
+      obtenerCobroQrRegistrado(pedido.id).then((cobro) => {
+        if (vigente && cobro?.estado === "registrado") setPagoQrConfirmado(true);
+      }).catch(() => {});
+    };
+    comprobarPago();
+    const timer = window.setInterval(comprobarPago, 10_000);
+    return () => { vigente = false; window.clearInterval(timer); };
+  }, [pedido?.id, pagoQrConfirmado]);
+
+  useEffect(() => {
+    if (!pedido?.id) return;
+    let vigente = true;
+    const comprobarRevision = () => {
+      obtenerRevisionQrPedido(pedido.id).then((revision) => {
+        if (vigente) setRevisionQr(revision);
+      }).catch(() => {});
+    };
+    comprobarRevision();
+    const timer = window.setInterval(comprobarRevision, 10_000);
+    return () => { vigente = false; window.clearInterval(timer); };
+  }, [pedido?.id]);
 
   useEffect(() => {
     setBusqueda("");
@@ -336,7 +371,9 @@ export function PedidoDetallePanel({
 
       {pedido ? (
         <>
-          <div className="space-y-3 border-b p-4">
+          {revisionQr && <p className="mx-4 mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm font-medium text-destructive">Cobro QR pendiente de revisión: {revisionQr}. No vuelvas a cobrar este pedido.</p>}
+          {pagoQrConfirmado && <p className="mx-4 mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-medium text-emerald-900">Pago QR confirmado. El pedido está bloqueado hasta cerrar la venta.</p>}
+          <div className="space-y-3 border-b p-4" inert={pagoQrConfirmado}>
             {infoSlot}
 
             <div>
@@ -448,7 +485,7 @@ export function PedidoDetallePanel({
             </div>
           </div>
 
-          <div className="space-y-3 border-b p-4">
+          <div className="space-y-3 border-b p-4" inert={pagoQrConfirmado}>
             <h3 className="text-sm font-semibold">Productos adicionados</h3>
 
             <div className="space-y-1 text-sm">
@@ -746,7 +783,7 @@ export function PedidoDetallePanel({
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              {tiene("aplicar_descuentos") && onAplicarDescuento && (
+              {!pagoQrConfirmado && tiene("aplicar_descuentos") && onAplicarDescuento && (
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -771,7 +808,7 @@ export function PedidoDetallePanel({
             onClose={() => setMostrandoCierre(false)}
             onCobroParcial={onCobroParcial}
             onConfirmar={onCerrarPedido}
-            onQrConfirmado={onQrConfirmado}
+            onQrConfirmado={() => { setPagoQrConfirmado(true); return onQrConfirmado?.(); }}
           />
         </>
       ) : (

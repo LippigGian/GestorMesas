@@ -878,6 +878,11 @@ export async function cerrarPedido(
   pagos: PagoPedidoInput[],
   localId: string
 ): Promise<void> {
+  if (pagos.length === 0) {
+    const { error } = await supabase.rpc("cerrar_pedido_pagado_qr", { p_pedido_id: pedidoId });
+    if (error) throw new Error(error.message);
+    return;
+  }
   validarPagosPedido(pagos);
   if (!localId) throw new Error("No hay un local activo configurado.");
   const cobro = await supabase.rpc("cobrar_pedido", { p_pedido_id: pedidoId, p_pagos: pagos, p_cerrar: true, p_items: [] });

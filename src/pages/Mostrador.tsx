@@ -307,6 +307,7 @@ export function Mostrador() {
       setCliente('');
     } catch (err) {
       if (sigueVigente()) setErrorMostrador(err instanceof Error ? err.message : 'No se pudo finalizar el pedido');
+      throw err;
     } finally {
       if (sigueVigente()) setGuardando(false);
     }
@@ -460,12 +461,6 @@ export function Mostrador() {
           onActualizarCantidadItem={cambiarCantidadItem}
           onCerrarPedido={finalizarPedido}
           onQrConfirmado={() => {
-            if (!pedidoSeleccionado) return;
-            setPedidos((prev) => prev.filter((pedido) => pedido.id !== pedidoSeleccionado.id));
-            setPedidoSeleccionado(null);
-            setPedidoItems([]);
-            setMenuPedidoAbierto(false);
-            setCliente('');
             setErrorMostrador(null);
           }}
           onCobroParcial={registrarCobroParcial}
