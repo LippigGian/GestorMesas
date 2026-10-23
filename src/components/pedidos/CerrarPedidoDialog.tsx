@@ -89,7 +89,6 @@ export function CerrarPedidoDialog({
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<CobroQr | null>(null);
-  const [modoQr, setModoQr] = useState<"static" | "dynamic">("static");
   const [qrCaja, setQrCaja] = useState<{ qrData: string; templateDocument: string | null } | null>(null);
   const [cargandoCaja, setCargandoCaja] = useState(false);
   const [generandoQr, setGenerandoQr] = useState(false);
@@ -171,7 +170,7 @@ export function CerrarPedidoDialog({
     try {
       setGenerandoQr(true);
       setError(null);
-      setQr(await crearCobroQr(pedidoId, pagos[0].medioPagoId, modoQr));
+      setQr(await crearCobroQr(pedidoId, pagos[0].medioPagoId, "static"));
     } catch (err) { setError(err instanceof Error ? err.message : "No se pudo generar el QR."); }
     finally { setGenerandoQr(false); }
   };
@@ -255,7 +254,6 @@ export function CerrarPedidoDialog({
         setError(null);
         setCobroParcial(false);
         setQr(null);
-        setModoQr("static");
         setQrCaja(null);
         setItemsCobroParcial({});
         setCantidadesCobradas({});
@@ -274,7 +272,6 @@ export function CerrarPedidoDialog({
         setTotalPagadoPrevio(pagado);
         setCantidadesCobradas(cantidadesCobradasDb);
         setQr(qrPendiente ?? qrPagado);
-        if (qrPendiente) setModoQr(qrPendiente.modo);
         setPagos([
           {
             id: crearPagoId(),
@@ -455,13 +452,14 @@ export function CerrarPedidoDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) void cerrarDialogo(); }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto pr-2">
         {error && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         )}
@@ -472,10 +470,10 @@ export function CerrarPedidoDialog({
             <p className="mt-1">${qr.monto.toLocaleString("es-AR")} acreditados. La venta sigue abierta hasta que pulses Cerrar venta.</p>
           </div>
         ) : (
-        <div className="grid gap-4 md:grid-cols-[1fr_0.9fr]">
+        <div className="grid items-start gap-4 md:grid-cols-[1fr_0.9fr]">
           <section className="overflow-hidden rounded-md border">
             <div className="bg-muted px-3 py-2 text-sm font-semibold">Adiciones</div>
-            <div className="max-h-72 divide-y overflow-y-auto">
+            <div className="divide-y">
               {items.length > 0 ? (
                 items.map((item) => (
                   <div
@@ -511,7 +509,7 @@ export function CerrarPedidoDialog({
             {cobroParcial && (
               <div className="border-t p-3">
                 <p className="mb-2 text-sm font-semibold">Seleccionar productos a cobrar</p>
-                <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                <div className="space-y-2">
                   {itemsPositivos.length > 0 ? (
                     itemsPositivos.map((item) => {
                       const cantidadSeleccionada = itemsCobroParcial[item.id] ?? 0;
@@ -719,14 +717,10 @@ export function CerrarPedidoDialog({
               </div>
               {medioQrSeleccionado && !pagoQrUnico && <p className="text-sm text-muted-foreground">El QR automático admite por ahora un único pago por el saldo completo.</p>}
               {pagoQrUnico && <div className="space-y-3 border-t pt-4">
-                <div className="grid grid-cols-2 rounded-md border p-1 text-sm" role="group" aria-label="Tipo de QR">
-                  <Button type="button" size="sm" variant={modoQr === "static" ? "default" : "ghost"} disabled={qrActivo} onClick={() => setModoQr("static")}>QR impreso</Button>
-                  <Button type="button" size="sm" variant={modoQr === "dynamic" ? "default" : "ghost"} disabled={qrActivo} onClick={() => setModoQr("dynamic")}>En pantalla</Button>
-                </div>
-                {modoQr === "static" && !qrCaja && <Button type="button" variant="outline" size="sm" disabled={cargandoCaja} onClick={prepararQrImpreso}>
+                {!qrCaja && <Button type="button" variant="outline" size="sm" disabled={cargandoCaja} onClick={prepararQrImpreso}>
                   {cargandoCaja ? "Consultando caja..." : "Ver QR de la caja"}
                 </Button>}
-                {modoQr === "static" && qrCaja && <div className="flex flex-col items-center gap-2 text-center">
+                {qrCaja && <div className="flex flex-col items-center gap-2 text-center">
                   <QRCodeSVG value={qrCaja.qrData} size={160} marginSize={2} aria-label="QR fijo de la caja Mercado Pago" />
                   {qrCaja.templateDocument && <a className="text-sm underline" href={qrCaja.templateDocument} target="_blank" rel="noreferrer">Abrir plantilla para imprimir</a>}
                 </div>}
@@ -741,6 +735,7 @@ export function CerrarPedidoDialog({
           </section>
         </div>
         )}
+        </div>
 
         <DialogFooter>
           {onCobroParcial && !qrRegistrado && (
@@ -773,7 +768,7 @@ export function CerrarPedidoDialog({
             type="button"
             onClick={qrRegistrado ? confirmar : pagoQrUnico ? generarQr : confirmar}
           >
-            {qrRegistrado ? "Cerrar venta" : pagoQrUnico ? (generandoQr ? "Cargando cobro..." : modoQr === "static" ? "Cargar monto al QR" : "Generar QR") : cobroParcial ? "Registrar cobro" : "Cerrar venta"}
+            {qrRegistrado ? "Cerrar venta" : pagoQrUnico ? (generandoQr ? "Cargando cobro..." : "Cargar monto al QR") : cobroParcial ? "Registrar cobro" : "Cerrar venta"}
           </Button>
         </DialogFooter>
       </DialogContent>
